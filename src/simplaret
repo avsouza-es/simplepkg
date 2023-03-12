@@ -1,0 +1,1194 @@
+#!/bin/bash
+#
+# simplaret: simplepkg's retrieval tool
+# feedback: rhatto at riseup.net | gpl
+#
+#  Simplaret is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  Simplaret is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+# $Rev$ - $Author$
+#
+
+BASENAME="`basename $0`"
+COMMON="/usr/libexec/simplepkg/common.sh"
+
+if [ -f "$COMMON" ]; then
+  source $COMMON
+else
+  echo "error: file $COMMON found, check your $BASENAME installation"
+  exit 1
+fi
+
+if [ -f "$HOME/.simplepkg/repos.conf" ]; then
+  REPOS_CONF="$HOME/.simplepkg/repos.conf"
+elif [ -f "/etc/simplepkg/repos.conf" ]; then
+  REPOS_CONF="/etc/simplepkg/repos.conf"
+else
+  REPOS_CONF="/etc/simplepkg/defaults/repos.conf"
+fi
+
+function simplaret_usage {
+
+  echo "usage: [ARCH=otherarch] [VERSION=otherversion] $BASENAME [OPTION] package-name"
+  echo -e "\t OPTIONS: --help, --install, --update (or --sync), --upgrade, --search, --get, --get-patches, --purge, --remove"
+  exit 1
+
+}
+
+function simplaret_get_index {
+
+  for file in `simplaret_metafiles`; do
+    simplaret_download $1 $file $2 --no-verbose
+  done
+
+}
+
+function simplaret_backup_index {
+
+  for file in `simplaret_metafiles`; do
+    if [ -f "$1/$file" ]; then
+      mv $1/$file $1/$file.old
+    fi
+  done
+
+}
+
+function simplaret_check_index {
+
+  for file in `simplaret_metafiles`; do
+    if [ ! -f "$1/$file" ] && [ -f "$1/$file.old" ]; then
+      echo Restoring old $file to $1...
+      mv $1/$file.old $1/$file
+     else
+      rm -f $1/$file.old
+    fi
+  done
+
+}
+
+function simplaret_import_gpg_keys {
+
+  if [ "$SIGNATURE_CHECKING" == "$on" ]; then
+    check_gnupg
+    if [ -f "$1/GPG-KEY" ] && [ -f "$1/GPG-KEY.old" ]; then
+      if ! diff $1/GPG-KEY $1/GPG-KEY.old &> /dev/null; then
+        gpg --import < $1/GPG-KEY
+      fi
+    elif [ -f "$1/GPG-KEY" ]; then
+      gpg --import < $1/GPG-KEY
+    fi
+  fi
+
+}
+
+function simplaret_download {
+
+  # download a file from a repo to a folder
+  # usage: simplaret <repository_url> <package> <destination-folder> [--no-verbose]
+
+  local protocol file
+  local wget_timeout wget_passive_ftp wget_verbose
+  local curl_timeout curl_passive_ftp curl_verbose
+  local ncftpget_timeout ncftpget_passive_ftp
+
+  protocol="`echo $1 | cut -d : -f 1 | tr '[:upper:]' '[:lower:]'`"
+  file="`basename $2`"
+
+  if [ ! -d "$3" ]; then
+    mkdir -p $3
+  fi
+
+  if [ ! -z "$CONNECT_TIMEOUT" ] || [ "$CONNECT_TIMEOUT" != "0" ]; then
+    wget_timeout="--timeout $CONNECT_TIMEOUT"
+    ncftpget_timeout="-t $CONNECT_TIMEOUT"
+    curl_timeout="--connect-timeout $CONNECT_TIMEOUT"
+  fi
+
+  if [ "$4" == "--no-verbose" ]; then
+    wget_verbose="--no-verbose"
+    curl_verbose="-#"
+    echo ""
+  fi
+
+  if [ "$protocol" == "http" ] || [ "$protocol" == "https" ]; then
+
+    echo Getting $1/$2:
+    if [ "$HTTP_TOOL" == "wget" ]; then
+      wget $wget_timeout $wget_verbose $1/$2 -O $3/$file
+    elif [ "$HTTP_TOOL" == "curl" ]; then
+      curl $curl_timeout $curl_verbose $1/$2 > $3/$file
+    else
+      echo $BASENAME: error: invalid value for config variable HTTP_TOOL: $HTTP_TOOL
+      echo $BASENAME: please check your config file $CONF
+      exit 1
+    fi
+
+  elif [ "$protocol" == "ftp" ]; then
+    echo Getting $1/$2:
+
+    if [ "$PASSIVE_FTP" == "1" ]; then
+      wget_passive_ftp="--passive-ftp"
+      ncftpget_passive_ftp="-F"
+      curl_passive_ftp="--ftp-pasv"
+    fi 
+
+    if [ "$FTP_TOOL" == "ncftpget" ]; then
+      ncftpget -c $ncftpget_timeout $ncftpget_passive_ftp $1/$2 > $3/$file
+    elif [ "$FTP_TOOL" == "wget" ]; then
+      wget $wget_timeout $wget_passive_ftp $wget_verbose $1/$2 -O $3/$file
+    elif [ "$FTP_TOOL" == "curl" ]; then
+      curl $curl_timeout $curl_passive_ftp $curl_verbose $1/$2 > $3/$file
+    else
+      echo $BASENAME: error: invalid value for config variable FTP_TOOL: $FTP_TOOL
+      echo $BASENAME: please check your config file $CONF
+      exit 1
+    fi
+
+  elif [ "$protocol" == "file" ]; then
+
+    url="`echo $1 | sed -e 's/file:\/\///'`"
+    if [ -f "$3/$file" ]; then
+      rm -f $3/$file
+    fi
+    echo -n "Copying $url/$2..."
+    if [ -f "$url/$2" ]; then
+      cp $url/$2 $3/$file 2> /dev/null
+    fi
+    if [ -f "$3/$file" ]; then
+      echo " done."
+    else
+      echo " failed."
+    fi
+
+  else
+
+    echo $BASENAME error: invalid protocol $protocol
+
+  fi
+
+}
+
+function simplaret_repository {
+
+  # return repository definitions from $REPOS_CONF file
+  # usage: simplaret_repository [root|repos|noarch|patches]
+
+  local definition
+
+  if [ -z "$1" ]; then
+    definition="ROOT"
+  else
+    definition="`echo $1 | tr '[:lower:]' '[:upper:]'`"
+  fi
+
+  if [ "$definition" == "REPOS" ] || [ "$definition" == "PATCHES" ]; then
+    definition="$definition-$ARCH-$VERSION"
+  elif [ "$definition" == "ROOT" ]; then
+    definition="$definition-$ARCH"
+  fi
+
+  grep -e "^$definition=" $REPOS_CONF | cut -d = -f 2 | sed -e 's/"//g' -e "s/'//g" | cut -d "#" -f 1
+
+}
+
+function simplaret_repository_name {
+
+  # return a repository name according the value of $repository
+
+  if [ -z "$repository" ]; then
+    false
+  elif echo $repository | grep -qe %; then
+    repository_name="`echo $repository | cut -d % -f 1`"
+    if [ -z "$repository_name" ]; then
+      echo $BASENAME: you should set a name for the repository $repository
+      echo $BASENAME: please correct your $REPOS_CONF
+      exit 1
+    fi
+  else
+    echo $BASENAME: you should set a name for the repository $repository
+    echo $BASENAME: please correct your $REPOS_CONF
+    exit 1
+  fi
+
+}
+
+function simplaret_repository_url {
+
+  # return a repository url according the value of $repository
+
+  if echo $repository | grep -qe %; then
+    repository_url="`echo $repository | cut -d % -f 2`"
+    if [ -z "$repository_url" ]; then
+      echo $BASENAME: you should set a url for the repository $repository
+      echo $BASENAME: please correct your $REPOS_CONF
+      exit 1
+    fi
+  else
+    echo $BASENAME: you should set a url for the repository $repository
+    echo $BASENAME: please correct your $REPOS_CONF
+    exit 1
+  fi
+
+  if [ "$repos_type" == "root" ]; then
+    simplaret_set_arch
+    distro="`basename $repository_url`"
+    if [ "$ARCH" == "x86_64" ] && [ "$distro" == "slackware" ]; then
+      distro="slackware64"
+    fi
+    repository_url="$repository_url/$distro-$VERSION/"
+  fi
+
+}
+
+function simplaret_set_storage_folder {
+
+  storage="$STORAGE/$ARCH/$VERSION/$repos_type"
+  if [ "$repos_type" == "noarch" ]; then
+    storage="$STORAGE/noarch"
+  elif [ "$repos_type" == "patches" ]; then
+    storage="$PATCHES_DIR/$ARCH/$VERSION"
+  fi
+
+}
+
+function simplaret_update {
+
+  local storage
+
+  echo Updating package information for arch $ARCH and version $VERSION... 
+
+  for repos_type in patches root repos noarch; do
+
+    simplaret_set_storage_folder
+
+    for repository in `simplaret_repository $repos_type`; do
+
+      simplaret_repository_name
+      simplaret_repository_url
+
+      if [ ! -d "$storage/$repository_name" ]; then
+        mkdir -p $storage/$repository_name
+      else
+        simplaret_backup_index $storage/$repository_name
+      fi
+
+      simplaret_get_index $repository_url $storage/$repository_name
+      simplaret_import_gpg_keys $storage/$repository_name
+      simplaret_check_index $storage/$repository_name
+
+      unset repository_name repository_url repository_protocol
+
+    done
+  done
+
+}
+
+function simplaret_find_package {
+
+  # grep packages in a repository's file list
+  # usage: simplaret_find_package <package-name|-all> <repository-folder>
+
+  if [ "$1" == "-all" ]; then
+    grep -E -e "$(pkg_ext_grep .)$" $2/`simplaret_filelist` | awk '{ print $8 }'
+  else
+    grep $1 $2/`simplaret_filelist` | awk '{ print $8 }' | grep -E -e "$(pkg_ext_grep .)$"
+  fi
+
+}
+
+function simplaret_show_package {
+
+  # print a package result
+  # usage: simplaret_show_package <package-file-name> [--basename-only|--filename-only|--formatted]
+
+  if [ "$2" == "--basename-only" ]; then
+    echo `basename $1`
+  elif [ "$2" == "--filename-only" ]; then
+    echo $1
+  elif [ "$2" == "--formatted" ]; then
+    echo $1,$repos_type,$repository
+  else 
+    if echo $1 | grep -q "/patches/"; then
+      patch="(patch)"
+    fi
+    if [ "$repos_type" == "noarch" ]; then
+      echo $name repository $repository_name: `basename $1` $patch
+    else
+      echo $name repository $repository_name, arch: $ARCH, version: $VERSION: `basename $1` $patch
+    fi
+  fi
+  unset patch
+
+}
+
+function simplaret_filelist {
+
+  if [ "$repos_type" == "patches" ]; then
+    echo FILE_LIST
+  else
+    echo FILELIST.TXT
+  fi
+
+}
+
+function simplaret_metafiles {
+
+  if [ "$SIGNATURE_CHECKING" == "$on" ]; then
+    echo `simplaret_filelist` CHECKSUMS.md5 GPG-KEY
+  else
+    echo `simplaret_filelist` CHECKSUMS.md5
+  fi
+
+}
+
+function simplaret_search {
+
+  # search packages
+  # usage: simplaret_search [package-name] [-display_mode]
+  # display_mode can be any accepted by simplaret_show_package
+
+  local priority priority_match message pattern mode
+
+  if [ ! -z "$1" ] && ! echo $1 | grep -q -e "^-"; then
+    pattern="$1"
+    mode="$2"
+  else
+    pattern="-all"
+    mode="$1"
+  fi
+
+  for repos_type in patches root repos noarch; do
+
+    name="`echo $repos_type | tr '[:lower:]' '[:upper:]'`"
+    simplaret_set_storage_folder
+
+    for repository in `simplaret_repository $repos_type`; do
+      
+      simplaret_repository_name
+
+      if [ ! -f "$storage/$repository_name/`simplaret_filelist`" ]; then
+        if [ "$WARNING" != "0" ] || [ ! -z "$SILENT" ]; then
+          if [ "$repos_type" == "noarch" ]; then
+            message=""
+          else
+            message="on arch $ARCH version $VERSION"
+          fi
+          echo warning: no file list for $repository_name repository $repository_name $message
+          echo please do a simplaret --update
+        fi
+      else
+
+        if [ "$repos_type" == "root" ]; then
+          # root repositories has ROOT_PRIORITY
+          for priority in $ROOT_PRIORITY; do
+            for file in `simplaret_find_package $pattern $storage/$repository_name | grep "/$priority/"`; do
+              simplaret_show_package $file $mode
+            done
+            priority_match="$priority_match|/$priority/"
+          done
+          # now we should return all matches that are not part of ROOT_PRIORITY
+          priority_match="`echo $priority_match | sed -e 's/^|//'`"
+          for file in `simplaret_find_package $pattern $storage/$repository_name | grep -E -v $priority_match`; do
+            simplaret_show_package $file $mode
+          done
+          priority_match=""
+        elif [ "$repos_type" == "repos" ]; then
+          # repos repositories has REPOS_PRIORITY
+          for priority in $REPOS_PRIORITY; do
+            for file in `simplaret_find_package $pattern $storage/$repository_name | grep "/$priority/"`; do
+              simplaret_show_package $file $mode
+            done
+            priority_match="$priority_match|/$priority/"
+          done
+          # now we should return all matches that are not part of REPOS_PRIORITY
+          priority_match="`echo $priority_match | sed -e 's/^|//'`"
+          for file in `simplaret_find_package $pattern $storage/$repository_name | grep -E -v $priority_match`; do
+            simplaret_show_package $file $mode
+          done 
+          priority_match=""
+        else
+          for file in `simplaret_find_package $pattern $storage/$repository_name`; do
+            simplaret_show_package $file $mode
+          done
+        fi
+
+      fi
+
+    done
+  done
+
+}
+
+function simplaret_purge {
+
+  # purge simplaret package cache
+  # usage: simplaret_purge [-w N]
+
+  local mtime mtime_message which and_patches
+
+  if [ "$1" == "-w" ] && [ ! -z "$2" ]; then
+    mtime="-mtime +`echo "$2*7" | bc -l`"
+    mtime_message="older than $2 weeks"
+  elif [ "$SIMPLARET_PURGE_WEEKS" != "0" ]; then
+    mtime="-mtime +`echo "$SIMPLARET_PURGE_WEEKS*7" | bc -l`"
+    mtime_message="older than $SIMPLARET_PURGE_WEEKS weeks"
+  else
+    mtime=""
+    mtime_mesage=""
+  fi
+
+  which="root repos noarch"
+  and_patches=""
+
+  if [ "$SIMPLARET_PURGE_PATCHES" == "1" ]; then
+    which="patches $which"
+    and_patches="including patches"
+  fi
+
+  if [ -z "$SILENT" ]; then
+    if [ -z "$mtime_message" ]; then
+      echo "$BASENAME: purging all packages for:"
+    else
+      echo "$BASENAME: purging all packages $mtime_message for:"
+    fi
+    echo -e "\t- Arch $ARCH and version $VERSION $and_patches"
+    echo -e "\t- Noarch folder"
+  fi
+
+  for repos_type in $which; do
+
+    simplaret_set_storage_folder
+
+    for file in `find $storage/ $mtime 2> /dev/null`; do
+      for extension in `pkg_ext` asc meta txt slack-required; do
+        if echo $file | grep -qe ".$extension$"; then
+          rm $file
+        fi
+      done
+    done
+
+  done
+
+  if [ -z "$SILENT" ]; then
+    echo $BASENAME: done purging simplaret cache
+    echo $BASENAME: please run $BASENAME --update to retrieve new package listings on this arch and version
+  fi
+
+}
+
+function simplaret_search_and_delete {
+
+  # search and delete packages
+  # usage: simplaret_search_and_delete <package> <folder> [--silent]
+
+  local file candidate place basename name version build
+  local name_version name_build
+
+  name="`package_name $1`"
+
+  if [ "$name" != "$1" ]; then
+    # searching by full package filename
+    name_version="`package_version $1`"
+    name_build="`package_build $1`"
+    name_ext="`package_ext $1`"
+
+    # search wheter the package filename is in the repositories
+    if [ "`simplaret_search $1 | grep $1 | wc -l`" == "0" ]; then 
+      echo "Error: package not found: $1"
+      return 1
+    fi
+
+    for file in `eval find $2/ $(pkg_ext_find $name*) 2> /dev/null`; do
+      candidate="`basename $file`"
+      version="`package_version $candidate`"
+      build="`package_build $candidate`"
+      ext="`package_ext $candidate`"
+      if [ "`package_name $candidate`" == "$name" ]; then
+
+        if [ "$name_version" == "$version" ] && \
+           [ "$name_build" == "$build" ] &&     \
+           [ "$name_ext" == "$ext" ]; then
+           LAST_DOWNLOADED_PACKAGE="$file"
+           if [ "$3" != "--silent" ]; then
+             echo Package $candidate already downloaded
+             # echo Package $candidate stored at `dirname $file`
+           else
+             true
+             # echo $file
+           fi
+           return 1
+         else
+           place="`dirname $file`"
+           basename="`strip_pkg_ext $file`"
+           rm -f $file
+           rm -f $place/$candidate.slack-required
+           rm -f $file.asc $place/$basename.meta $place/$basename.txt
+           break
+         fi
+           
+       fi
+    done
+
+  else
+
+    for file in `eval find $2/ $(pkg_ext_find $name*) 2> /dev/null`; do
+      candidate="`basename $file`"
+      version="`package_version $candidate`"
+      build="`package_build $candidate`"
+      ext="`package_ext $candidate`"
+      if [ "`package_name $candidate`" == "$name" ]; then
+        # check if has the same version and build number, otherwise erase the old one
+        for result in `simplaret_search $(package_name $candidate) --basename-only`; do
+          if [ "`package_name $candidate`" == "`package_name $result`" ]; then
+
+            if [ "$version" == "`package_version $result`" ] && \
+               [ "$build" == "`package_build $result`" ] &&     \
+               [ "$ext" == "`package_ext $result`" ]; then
+               LAST_DOWNLOADED_PACKAGE="$file"
+               if [ "$3" != "--silent" ]; then
+                 echo Package $candidate already downloaded
+                 # echo Package $candidate stored at `dirname $file`
+               else
+                 true
+                 # echo $file
+               fi
+               return 1
+             else
+               place="`dirname $file`"
+               basename="`strip_pkg_ext $file`"
+               rm -f $file
+               rm -f $place/$candidate.slack-required
+               rm -f $file.asc $place/$basename.meta $place/$basename.txt
+               break
+             fi
+
+          fi
+        done
+      fi
+    done
+
+  fi
+
+}
+
+function simplaret_get {
+
+  # get a package
+  # usage: simplaret_get <package-name|package-file-name> [--silent]
+
+  local silent generate_patches search search_results
+  local name version build
+
+  # prevent user to stay in $storage
+  cd 
+
+  name="`package_name $1`"
+
+  if [ "$name" != "$1" ]; then
+    # simplaret_get was called with the package file
+    # name and not with just the package name
+    version="`package_version $1`"
+    build="`package_build $1`"
+  else
+    version=""
+    build=""
+  fi
+
+  # first search for an already downloaded package
+  for repos_type in patches root repos noarch; do
+
+    simplaret_set_storage_folder
+    simplaret_search_and_delete $1 $storage $2
+
+    if [ "$?" == "1" ]; then
+      return 0
+    fi
+
+  done
+
+  # then search for the package in the repositories
+  search="`simplaret_search $1 --formatted`"
+  search_results="`echo "$search" | wc -l`"
+
+  for result in $search; do
+
+    # remaining search results
+    let search_results--
+
+    file="`echo $result | cut -d , -f 1`"
+    repos_type="`echo $result | cut -d , -f 2`"
+    repository="`echo $result | cut -d , -f 3`"
+
+    simplaret_set_storage_folder
+    simplaret_repository_name
+
+    candidate="`basename $file`"
+    if [ "`package_name $candidate`" == "$name" ]; then
+
+      if [ ! -z "$build" ] && [ ! -z "$version" ]; then
+        # simplaret_get was called with the package file
+        # name and not with just the package name
+        if [ "$version" != "`package_version $candidate`" ] && \
+           [ "$build" != "`package_build $candidate`" ]; then
+           # the package version and/or build doesnt matched
+           # the desired one
+           continue
+         fi
+      fi
+
+      simplaret_repository_url
+
+      # if repos_type == root, the package is a patch and
+      # STORE_ROOT_PATCHES_ON_PATCHES_DIR config parameter is enabled, then
+      # save it on $PATCHES_DIR/root-$repository_name, so all patches
+      # are placed in the same tree
+      if [ "$repos_type" == "root" ] && \
+         [ "$STORE_ROOT_PATCHES_ON_PATCHES_DIR" == "1" ] && echo $file | grep -q "patches"; then
+        folder="$PATCHES_DIR/$ARCH/$VERSION/root-$repository_name"
+        generate_patches="1"
+      else
+        folder="$storage/$repository_name"
+      fi
+
+      # download the package
+      simplaret_download $repository_url $file $folder
+
+      if [ -f "$folder/$candidate.asc" ]; then
+        rm $folder/$candidate.asc
+      fi
+
+      if [ -f "$folder/$name.slack-required" ]; then
+        rm $folder/$name.slack-required
+      fi
+
+      # download the signature, if exist
+      if simplaret_check_url $repository_url/$file.asc; then
+        simplaret_download $repository_url $file.asc $folder
+      fi
+
+      # download slack-required, if exist
+      if simplaret_check_url $repository_url/`dirname $file`/$name.slack-required; then
+        simplaret_download $repository_url `dirname $file`/$name.slack-required $folder
+      fi
+
+      if [ ! -f "$folder/$candidate" ]; then
+        LAST_DOWNLOADED_PACKAGE="0"
+        if [ "$2" != "--silent" ]; then
+          echo Error downloading $candidate from $repos_type repository $repository_url, please check your settings
+        fi
+        # check if there's also more repositories to try
+        if [ "$SIMPLARET_DOWNLOAD_FROM_NEXT_REPO" != "1" ]; then
+          return 1
+        else
+          if [ "$2" != "--silent" ]; then
+            echo Trying to fetch $candidate from the next repository...
+          fi
+          if (($search_results <= 0)); then
+            return 1
+          fi
+        fi
+      else
+        LAST_DOWNLOADED_PACKAGE="$folder/$candidate"
+        if [ "$2" != "--silent" ]; then
+          silent=""
+          echo Package $candidate stored at $folder
+        else
+          # echo $folder/$candidate
+          silent="--silent"
+        fi
+        if [ "$SIGNATURE_CHECKING" == "$on" ]; then
+          if [ -f "$folder/$candidate.asc" ]; then
+            gpg --verify $folder/$candidate.asc $folder/$candidate
+            if [ "$?" != "0" ]; then
+              echo "Package signature does not match. Removing package."
+              rm -f $folder/$candidate.asc $folder/$candidate
+              LAST_DOWNLOADED_PACKAGE=""
+              return 1
+            fi
+          else
+            echo "Missing signature. Removing package."
+            rm -f $folder/$candidate.asc $folder/$candidate
+            LAST_DOWNLOADED_PACKAGE=""
+            return 1
+          fi
+        fi
+        # generate the patches FILE_LIST and PACKAGES.TXT if needed
+        if [ "$generate_patches" == "1" ]; then
+          gen_patches_filelist $folder
+          gen_packages_txt $folder
+          gen_md5_checksums $folder
+        fi
+        simplaret_checksum $storage/$repository_name/CHECKSUMS.md5 $folder/$candidate $silent
+        return $?
+      fi
+
+    fi
+
+  done
+
+}
+
+function simplaret_search_and_process_patch {
+
+  local package_version package_build installed_version pack
+  local installed_build repos_type get is_patch package_match
+
+  # get just the file and package name
+  sugested_filename="`echo $sugested | cut -d , -f 1`"
+  sugested_pack="`package_name $sugested_filename`"
+
+  # search if its installed in the jail
+  if grep -q -e "^$sugested_pack$" $PACKAGES_TMP; then
+  
+    # get the repository type
+    repos_type="`echo $sugested | cut -d , -f 2`"
+
+    if echo $sugested | grep -q "patches"; then
+      is_patch="yes"
+    else
+      is_patch="no"
+    fi
+
+    # now split the file name into pieces
+    package_version="`package_version $sugested_filename`"
+    package_build="`package_build $sugested_filename`"
+
+    # check if the patch was already downloaded
+    if echo "$DOWNLOADED_PATCHES" | grep -q " $ARCH:$VERSION:$sugested_pack "; then
+      #if [ "$IS_UPGRADE" != "1" ]; then
+        #echo Package $sugested_pack already downloaded
+        #echo "Jail $root needs package $sugested_pack (already downloaded, skipping)"
+        return
+      #fi
+    fi
+
+    pack="`echo $sugested_pack | sed -e 's/\+/\\\+/'`"
+    installed="`check_installed $pack $root`"
+    installed_version="`package_version $installed.tgz`"
+    installed_build="`package_build $installed.tgz`"
+
+    get="no"
+
+    # if needed, download the patch
+    if [ "$repos_type" == "patches" ]; then
+
+      if  [ "$package_version" != "$installed_version" ] || [ "$package_build" != "$installed_build" ]; then
+        get="yes"
+        package_match="no"
+      elif [ "$DOWNLOAD_EVEN_APPLIED_PATCHES" == "1" ]; then
+        get="yes"
+      fi
+
+    elif [ "$repos_type" == "root" ] && [ "$is_patch" == "yes" ]; then
+
+      if  [ "$package_version" != "$installed_version" ] || [ "$package_build" != "$installed_build" ]; then
+        get="yes"
+        package_match="no"
+      elif [ "$DOWNLOAD_EVEN_APPLIED_PATCHES" == "1" ]; then
+        get="yes"
+      fi
+
+    else
+      # here, we're dealing with repositories other than ROOT and REPOS,
+      # so we need to check if either version or build number are different,
+      # otherwise all installed packages would be downloaded
+      if [ "$package_version" != "$installed_version" ] || [ "$package_build" != "$installed_build" ]; then
+        get="yes"
+        package_match="no"
+      fi
+    fi
+
+    # finally, get the package
+    if [ "$get" == "yes" ]; then
+      if [ "$IS_UPGRADE" == "1" ]; then
+        if [ "$package_match" == "no" ]; then
+          simplaret_install $sugested_pack
+        else
+          simplaret_get $sugested_pack
+        fi
+      else
+        simplaret_get $sugested_pack
+      fi
+      if [ "$?" == "0" ]; then
+        DOWNLOADED_PATCHES="$DOWNLOADED_PATCHES $ARCH:$VERSION:$sugested_pack " # the ending space is important
+      fi
+    fi
+
+  fi
+
+  unset get
+
+}
+
+function simplaret_get_jail_patches {
+
+  # get patches from a jail
+  # usage: simplaret_get_jail_patches <jail-folder>
+
+  local oldarch oldversion
+
+  if [ ! -z "$1" ]; then
+    root="$1"
+  else
+    root="/"
+  fi
+
+  # save current arch and version
+  oldarch="$ARCH"
+  oldversion="$VERSION"
+
+  ARCH="`default_arch $root`"
+  VERSION="`default_version $root`"
+
+  # in case there's something wrong with the jail, abort
+  if [ -z "$VERSION" ] || [ -z "$ARCH" ]; then
+    return
+  fi
+
+  # we need to do that for each arch/version pairs, but just once for each pair
+  if ! echo "$DISTRO_UPDATED" | grep -q " $ARCH:$VERSION "; then
+    simplaret_update
+    DISTRO_UPDATED="$DISTRO_UPDATED $ARCH:$VERSION " # the ending space is important
+    echo ""
+  fi
+
+  # installed packages at $root
+  PACKAGES_TMP=/tmp/simplaret_packages.$RANDOM
+  rm -f $PACKAGES_TMP ; touch $PACKAGES_TMP ; chmod 600 $PACKAGES_TMP
+  ls -1 $root/var/log/packages/ | sed -e 's/-[^-]*-[^-]*-[^-]*$//' > $PACKAGES_TMP
+
+  echo Fetching patches for arch $ARCH and version $VERSION for jail $root
+
+  # list all available patches from PATCHES and ROOT repositories
+  for sugested in `simplaret_search --formatted | grep patches | grep -v ",repos," | grep -v ",noarch,"`; do
+    simplaret_search_and_process_patch
+  done
+
+  # grab patches from every other places
+  if [ "$CONSIDER_ALL_PACKAGES_AS_PATCHES" == "1" ]; then
+
+    for sugested in `simplaret_search --formatted | grep patches | grep ",repos," | grep ",noarch,"`; do
+      simplaret_search_and_process_patch
+    done
+
+    for sugested in `simplaret_search --formatted | grep -v patches`; do
+      simplaret_search_and_process_patch
+    done
+
+  fi
+
+  rm $PACKAGES_TMP
+
+  # restore arch and version
+  ARCH="$oldarch"
+  VERSION="$oldversion"
+
+}
+
+function simplaret_get_patches {
+
+  local jailpath
+
+  if [ "$1" == "--upgrade" ]; then
+    IS_UPGRADE="1"
+  fi
+
+  if [ ! -z "$ROOT" ]; then
+    simplaret_get_jail_patches $ROOT
+    return $?
+  fi
+
+  # first get patches from the root system
+  simplaret_get_jail_patches
+
+  # then get the needed patches for each installed jail
+  if [ -s "$JAIL_LIST" ]; then
+    for jailpath in `cat $JAIL_LIST`; do
+      if [ -d "$jailpath/var/log/packages" ]; then
+        ROOT="$jailpath"
+        simplaret_get_jail_patches $jailpath
+      fi
+    done
+  fi
+
+  ROOT=""
+
+}
+
+function simplaret_checksum {
+
+  # simplaret_checksum <md5file> <file-name> [--silent]
+
+  if [ ! -f "$1" ] || [ ! -f "$2" ]; then
+    if [ "$3" != "--silent" ]; then
+      echo Checksum error: file not found
+    fi
+    return 1
+  fi
+
+  pack="`basename $2`"
+  checksum="`grep -e "$pack\$" $1 | awk '{ print $1 }'`"
+
+  if [ -z "$checksum" ]; then
+    echo file $2 not in checksum $1
+    return 1
+  elif [ "$checksum" != "`md5sum $2 | awk '{ print $1 }'`" ]; then
+    if [ "$3" != "--silent" ]; then
+      echo Checksum mismatch for file `basename $file`
+    fi
+    return 1
+  else
+    if [ "$3" != "--silent" ]; then
+      echo Checksum ok for file `basename $file`
+    fi
+    return 0
+  fi
+
+}
+
+function simplaret_install {
+
+  # download and install a package
+  # usage: simplaret_install <package-name1|package-file-name1> ... [--skip-checks]
+
+  local package root jail_arch jail_version slack_required dep dependency tmp
+  local name version build
+
+  for package in $*; do
+
+    if [ "$package" == "--skip-checks" ]; then
+      continue
+    fi
+
+    name="`package_name $package`"
+  
+    root="/$ROOT"
+    mkdir -p $root/var/log/setup/tmp
+  
+    if [ "`echo $package | sed -e 's/\(..\).*/\1/g'`" == "--" ]; then
+      echo $BASENAME: install: syntax error: expected package name
+      return 1
+    fi
+  
+    # now we check if ARCH and VERSION from the
+    # repository are the same of the jail
+    if ! echo $* | grep -q -- "--skip-checks"; then
+      jail_arch="`default_arch $root`"
+      jail_version="`default_version $root`"
+      if [ "$ARCH" != "$jail_arch" ]; then
+        echo "$BASENAME: requested repository arch ($ARCH) doesn't match jail arch ($jail_arch)"
+        echo "$BASENAME: please use \"$BASENAME --get $package --skip-checks\" to ignore this warning and install anyway"
+        return
+      elif [ "$VERSION" != "$jail_version" ]; then
+        echo "$BASENAME: requested repository version ($VERSION) doesn't match jail version ($jail_version)"
+        echo "$BASENAME: please use \"$BASENAME --get $package --skip-checks\" to ignore this warning and install anyway"
+        return 1
+      fi
+    fi
+  
+    # package="`simplaret_get $package --silent`"
+    simplaret_get $package --silent
+    package="$LAST_DOWNLOADED_PACKAGE"
+  
+    if [ "$package" != "0" ] && [ ! -z "$package" ]; then
+      slack_required="`dirname $package`/$name.slack-required"
+      if [ -f "$package" ]; then
+  
+        if [ -f "$slack_required" ] && [ "$DEPENDENCY_CHECKING" == "1" ]; then
+          # TODO: check dependency versions
+          # this routine checks for dependencies in package's slack-required
+          # procedure adapted from createpkg script
+          ( grep -v '^#' $slack_required | awk '{ print $1 }' | while read dep; do
+             if [ ! -z "$dep" ]; then
+              dependency="`echo $dep | awk '{ print $package }'`"
+              simplaret_solve_dep $name $dependency $root
+             fi
+             true
+           done )
+        fi
+  
+        ROOT=$root upgradepkg --install-new $package
+        LAST_DOWNLOADED_PACKAGE="0"
+  
+      else
+        echo "Error: could not install package $package: file not found"
+        LAST_DOWNLOADED_PACKAGE="0"
+        return 1
+      fi
+    else
+      echo "Error: could not install package $package"
+      LAST_DOWNLOADED_PACKAGE="0"
+      return 1
+    fi
+
+  done
+
+}
+
+function simplaret_set_arch {
+
+  # set correct value for ARCH
+
+  local repos_type new_arch
+
+  # any arch defined in ARCH_i486 that hasn't an entry
+  # on $REPOS_CONF will be mapped to i486
+
+  ARCH_i486=" nocona prescott pentium4m pentium4 pentium-m pentium3m pentium3 "
+  ARCH_i486="$ARCH_i486 pentium2 i686 pentium-pro i586 pentium-mmx pentium i486 "
+  ARCH_i486="$ARCH_i486 athlon-mp athlon-xp athlon4 athlon-tbird athlon k6 k6-2 "
+  ARCH_i486="$ARCH_i486 k6-3 winchip-c6 winchip2 c3 c3-2 "
+
+  # any arch defined in ARCH_x86_64 that hasn't an entry
+  # on $REPOS_CONF will be mapped to x86_64
+
+  ARCH_x86_64=" k8 opteron athlon64 athlon-fx x86_64 "
+
+  for repos_type in patches root repos noarch; do
+    if [ -z "`simplaret_repository $repos_type`" ]; then
+      # there's no repository definition for that arch
+      if echo "$ARCH_i486" | grep -q " $ARCH "; then
+        new_arch="i486"
+      elif echo "$ARCH_x86_64" | grep -q " $ARCH "; then
+        new_arch="x86_64"
+      else
+        echo "$BASENAME: error: no repository definition for arch $ARCH"
+        echo "$BASENAME: please check your $CONF and $REPOS_CONF config files"
+        exit 1
+      fi
+    else
+      return
+    fi
+  done
+
+  echo "$BASENAME: changing arch from $ARCH to $new_arch"
+
+  ARCH="$new_arch"
+
+}
+
+function simplaret_check_url {
+
+  # check if a given url exist, use just with small files
+  # usage: simplaret_check_url <url>
+
+  if [ -z "$1" ]; then
+    return 1
+  fi
+
+  if echo $1 | grep -q -e "^file:///"; then
+    url="`echo $1 | sed -e 's/file:\/\///'`"
+    if [ -e "$url" ]; then
+      return 0
+    else
+      return 1
+    fi
+  fi
+
+  if [ ! -z "$CONNECT_TIMEOUT" ] || [ "$CONNECT_TIMEOUT" != "0" ]; then
+    curl_timeout="--connect-timeout $CONNECT_TIMEOUT"
+  fi
+
+  if [ "`curl $curl_timeout -I $1 2> /dev/null | head -n 1 | awk '{ print $2 }'`" == "200" ]; then
+    # server gave a 200 response, so the url exist
+    return 0
+  else
+    # the url is missing
+    return 1
+  fi
+
+}
+
+function simplaret_solve_dep {
+
+  # solve dependency for a package
+  # this function was adapted from createpkg script
+  # usage: simplaret_solve_dep <package-name> <package-depencency-name> [root-folder]
+
+  local installed check exit_code
+
+  local package="$1"
+  local pack="$2"
+  local root="/$3"
+
+  pack="`echo $pack| sed -e 's/\+/\\\+/'`"
+  installed="`check_installed $pack $root`"
+  check=$?
+
+  if [ -z "$installed" ]; then
+    if [ $check -ne 0 ]; then
+      echo "$BASENAME: processing $1 dependency $pack" 
+      # simplaret_install $pack
+      SIMPLARET_CHILD=$SIMPLARET_CHILD ROOT=$root ARCH=$ARCH VERSION=$VERSION \
+      simplaret --install $pack
+    fi
+  fi
+
+}
+
+function simplaret_remove {
+
+  # remove packages
+  # usage: simplaret_remove <package1> [<package2> ... <packageN>]
+
+  for package in $*; do
+    ROOT=/$ROOT removepkg $package
+  done
+
+}
+
+function simplaret_req_arg {
+
+  # requires arg
+
+  if [ -z "$1" ]; then
+    simplaret_usage;
+  fi
+
+}
+
+if [ -z "$1" ]; then
+  simplaret_usage
+  exit 1
+else
+  eval_config $BASENAME
+  set_constants
+fi
+
+# This is used to show how many children process we have
+if [ -z "$SIMPLARET_CHILD" ]; then
+  SIMPLARET_CHILD="1"
+else
+  let SIMPLARET_CHILD++
+fi
+
+BASENAME="`basename $0`[$SIMPLARET_CHILD]"
+
+case $1 in
+  "--update" | "update" | "--sync" | "sync" ) simplaret_update ;;
+  "--upgrade" | "upgrade") simplaret_get_patches --upgrade ;;
+  "--get-patches" | "get-patches") simplaret_get_patches ;;
+  "--search" | "search") shift ; simplaret_req_arg $1 ; simplaret_search $* ;;
+  "--get" | "get") shift ; simplaret_req_arg $1 ; simplaret_get $* ;;
+  "--purge" | "purge") shift ; simplaret_purge $* ;;
+  "--install" | "install") shift ; simplaret_req_arg $1 ; simplaret_install $* ;;
+  "--remove" | "remove") shift ; simplaret_req_arg $1 ; simplaret_remove $* ;;
+  "--help" | "help") simplaret_usage ;;
+  *)
+    if echo $1 | grep -q -v '^--'; then
+      simplaret_install $*
+    else
+      simplaret_usage
+    fi
+    ;;
+esac
+

@@ -1,0 +1,66 @@
+#!/bin/bash
+#
+# simpletrack $Id$: slacktrack/altertrack wrapper from simplepkg suite
+# feedback: rhatto at riseup.net | gpl
+# 
+#  Simpletrack is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  Simpletrack is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+
+PRIORITY=${SLACKTRACK_PRIORITY:=slacktrack-real slacktrack altertrack}
+BASENAME="`basename $0`"
+
+function slacktrack {
+
+  $1 -b $REPOS -x $TMP,$SRC_DIR,/dev -jefkzp "$PACKAGE-$VERSION-$ARCH-$BUILD.$MKBUILD_COMPRESS" "./$2"
+
+}
+
+function slacktrack-real {
+
+  $1 -b $REPOS -x $TMP,$SRC_DIR,/dev -jefkzp "$PACKAGE-$VERSION-$ARCH-$BUILD.$MKBUILD_COMPRESS" "./$2"
+
+}
+
+function altertrack {
+
+  $1 -b $REPOS -x $TMP,$SRC_DIR,/dev -jefkzp "$PACKAGE-$VERSION-$ARCH-$BUILD.$MKBUILD_COMPRESS" "./$2"
+
+}
+
+# -----------------------------------------------------
+#                       main
+# -----------------------------------------------------
+
+if [ -z "$1" ]; then
+	echo "usage: $BASENAME [options] <build-script>"
+	exit 1
+elif [ ! -f "$1" ]; then
+	echo "$1: file not found"
+	exit 1
+fi
+
+for tracker in $PRIORITY; do
+	path="`which $tracker 2> /dev/null`"
+	found="$?"
+	if [ "$found" == "0" ]; then
+		echo $BASENAME: using $tracker...
+		$tracker $path $*
+		break
+	fi
+done
+
+if [ "$found" != "0" ]; then
+  echo "Can't find any suitable tracker among $PRIORITY"
+  echo "Does slacktrack package is installed in your system?"
+  exit 1
+fi

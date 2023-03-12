@@ -1,0 +1,60 @@
+aaa_base: ADD
+aaa_elflibs: ADD
+acpid: REC
+bash: ADD
+bin: ADD
+bzip2: ADD
+coreutils: ADD
+cups: REC
+cxxlibs: ADD
+devs: ADD
+etc: ADD
+a2ps
+bc
+enscript
+espgs
+etc
+findutils
+gawk
+gettext
+getty-ps
+gimp-print
+glibc
+glibc-i18n
+glibc-profile
+glibc-solibs
+glibc-zoneinfo
+grep
+gzip
+hpijs
+infozip
+ispell
+kbd
+kde-i18n-pt_BR
+kdebase
+kdelibs
+koffice-i18n-pt_BR
+less
+libart_lgpl
+libidn
+libmng
+pkgtools
+qt
+sed
+shadow
+sudo
+sysklogd
+sysvinit
+utempter
+util-linux
+x11
+x11-devel
+x11-fonts-100dpi
+x11-fonts-cyrillic
+x11-fonts-misc
+x11-fonts-scale
+x11-xdmx
+x11-xnest
+x11-xvfb
+openoffice-chroot
+openssl

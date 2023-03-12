@@ -1,0 +1,376 @@
+\documentclass{article}
+\usepackage[brazilian]{babel}
+\usepackage[latin1]{inputenc}
+\usepackage[dvips]{graphics}
+\usepackage{hyperref}
+\usepackage{html,makeid}
+
+\title{Simplaret: ferramenta para obtenção de pacotes}
+\author{Silvio Rhatto}
+
+\begin{document}\label{start}
+\maketitle
+
+\begin{abstract}
+O \emph{simplaret} é a ferramenta do \htmladdnormallink{simplepkg}{http://slack.fluxo.info/node/12} utilizada para obter pacotes de repositórios locais ou remotos. Com ele, você pode não só baixar pacotes do seu sistema \emph{slackware} como também pode baixar de qualquer versão ou arquitetura cujo repositório siga os \htmladdnormallink{Mirror Guidelines do Slackware}{http://www.slackware.com/getslack/mirroring_guidelines.txt}, permitindo que você gerencie facilmente todas as suas jaulas e instalações de Slackware, independentemente da arquitetura ou versão que elas utilizem. English version \htmladdnormallink{here}{/node/17}.
+
+Além da obtenção, o \emph{simplaret} ainda pode fazer a instalação, a remoção ou a atualização dos pacotes de um sistema e também das demais jaulas existentes numa máquina. O simplaret é totalmente não-intrusivo no sistema e roda sobre o pkgtool.
+\end{abstract}
+
+\section{Obtendo e instalando}
+
+O \emph{simplaret} acompanha o \htmladdnormallink{simplepkg}{http://slack.fluxo.info/node/12} e por isso sua instalação é feita baixando o pacote do simplepkg
+em \htmladdnormallink{http://slack.fluxo.info/packages/noarch/}{http://slack.fluxo.info/packages/noarch/} e em seguida instalando-o com o comando
+
+\begin{verbatim}
+installpkg simplepkg-VERSAO-noarch-BUILD.tgz
+\end{verbatim}
+
+A partir daí você já pode utilizar o \emph{simplaret} para baixar pacotes dos repositórios padrão ou então alterar a lista de repositórios do arquivo \emph{/etc/simplepkg/repos.conf} ou a configuração do aplicativo pelo arquivo \emph{/etc/simplepkg/simplepkg.conf}.
+
+A configuração padrão de repositórios no simplaret se encontra em \emph{/etc/simplepkg/defaults/repos.conf}, mas não recomendamos você editá-la. Use, ao invés disso, o \emph{/etc/simplepkg/repos.conf} para sua configuração personalizada: se o simplaret encontrar esse arquivo, ele simplesmente ingorará as definições padrão de repositório.
+
+\section{Usando o simplaret}
+
+Em geral, como o \emph{simplaret} armazena as informações em pastas do sistema, algumas funcionalidades só estarão disponíveis quando o mesmo é rodado pelo superusuário do sistema.
+
+Antes de explorar todas as funcionalidades do \emph{simplaret}, é necessário atualizar a lista de pacotes para sua arquitetura e versão, o que pode ser feito com o comando
+
+\begin{verbatim}
+simplaret --update
+\end{verbatim}
+
+ou simplesmente
+
+\begin{verbatim}
+simplaret update
+\end{verbatim}
+
+já que o \emph{simplaret} suporta que suas opções básicas de linha de comando sejam passas precedidas por dois hífens ou não (\emph{--update} ou \emph{update}).
+
+Depois de atualizar a lista de pacotes, experimente buscar por um pacote com um comando do tipo
+
+\begin{verbatim}
+simplaret search ekiga
+\end{verbatim}
+
+O resultado pode ser algo do tipo
+
+\begin{verbatim}
+REPOS repository fluxo, arch: i386, version: 11.0: ekiga-2.0.5-i586-1rd.tgz
+\end{verbatim}
+
+Como veremos adiante, "REPOS" significa o tipo de repositório, "fluxo" é o nome do
+repositório, "arch" mostra a arquitetura do pacote e do repositório (\emph{i386}, no caso)
+e "version" a versão do repositório (\emph{11.0}, no caso).
+
+Para instalar esse pacote, basta o comando
+
+\begin{verbatim}
+simplaret install ekiga
+\end{verbatim}
+
+Por padrão, se o \emph{simplaret} encontrar no repositório um arquivo \emph{slack-required} referente ao pacote en questão (ou seja, um arquivo \emph{ekiga.slack-required} na mesma pasta que o pacote do ekiga, neste caso), então o \emph{simplaret} tentará instalar todos os requisitos contidos nesse slack-required, caso já não estejam instalados no sistema. Essa resolução de dependências automática pode, no entanto, ser desabilitada através de um parâmetro de configuração, como veremos a seguir.
+
+Se você apenas quiser baixar o pacote, digite apenas
+
+\begin{verbatim}
+simplaret get ekiga
+\end{verbatim}
+
+No caso do \emph{simplaret} encontrar mais de um pacote com o mesmo nome, ele baixará na ordem que a opção "search" listá-los, sendo que essa precedência é definida de acordo com a ordem em que os repositórios estão listados no arquivo de configuração. Por exemplo, o comando
+
+\begin{verbatim}
+simplaret search kernel-generic
+\end{verbatim}
+
+pode retornar algo como
+
+\begin{verbatim}
+ROOT repository fluxo, arch: i386, version: 11.0: kernel-generic-2.6.17.13-i486-1.tgz
+ROOT repository fluxo, arch: i386, version: 11.0: kernel-generic-2.6.18-i486-1.tgz
+\end{verbatim}
+
+Assim, o comando
+
+\begin{verbatim}
+simplaret install kernel-generic
+\end{verbatim}
+
+instalará o pacote "kernel-generic-2.6.17.13-i486-1.tgz" ao invés do pacote "kernel-generic-2.6.18-i486-1.tgz". Caso você queira forçar a instalação do segundo pacote, basta especificá-lo com o nome completo:
+
+\begin{verbatim}
+simplaret install kernel-generic-2.6.18-i486-1.tgz
+\end{verbatim}
+
+Se um pacote já estiver instalado no sistema, a opção install fará o upgrade do mesmo, caso a versão ou o build number do pacote presente no repositório for diferente da instalada no sistema. Assim, o comando
+
+\begin{verbatim}
+simplaret install simplepkg
+\end{verbatim}
+
+atualiza o simplepkg caso haja uma nova versão disponível nalgum repositório.
+
+Para remover um pacote, digite
+
+\begin{verbatim}
+simplaret remove nome-do-pacote
+\end{verbatim}
+
+o que na verdade é apenas uma chamada indireta ao removepkg.
+
+O \emph{simplaret} armazena pacotes baixados de repositórios numa pasta local do sistema, que por padrão é \emph{/var/simplaret}. Conforme você vai baixando e instalando pacotes, essa pasta tende a crescer e ocupar muito espaço. Para apagar os pacotes, basta usar o comando
+
+\begin{verbatim}
+simplaret purge
+\end{verbatim}
+
+Isso apagará apenas os pacotes da arquitetura e versão usadas atualmente. Detalhes de como apagar os pacotes de todas a arquiteturas e versões serão dados numa seção seguinte.
+
+Você também pode forçar o \emph{simplaret} a apagar apenas pacotes antigos. O comando a seguir apaga apenas os pacotes baixados a três semanas ou mais (ou seja, os pacotes baixados a menos de três semanas continuam armazenados):
+
+\begin{verbatim}
+simplaret purge -w 3
+\end{verbatim}
+
+\section{Baixando patches e atualizando o sistema}
+
+O \emph{simplaret} possui, além do básico do gerenciamento de pacotes, duas funcionalidades adicionais: a obtenção e a aplicação de patches (pacotes contendo atualizações e correções de segurança).
+
+Assumindo que os repositórios contendo patches para sua distribuição do tipo Slackware estejam corretamente configurados, o que ocorre com a configuração padrão que acompanha o \emph{simplepkg} e que veremos a seguir como alterá-la, você pode baixar os patches disponíveis para o seu sistema com o comando 
+
+\begin{verbatim}
+simplaret get-patches
+\end{verbatim}
+
+Se você quiser não só baixar mas também atualizar seu sistema, isto é, fazer um upgrade com os patches disponíveis, use
+
+\begin{verbatim}
+simplaret upgrade
+\end{verbatim}
+
+\section{Trabalhando com múltiplas arquiteturas e versões}
+
+Até aqui vimos apenas o que é a obrigação de qualquer sistema de gerenciamento de pacotes possuir: obtenção de pacotes, instalação, busca e atualização do sistema. O que diferencia o \emph{simplaret} das outras ferramentas, além do esquema de resolução de dependências, é sua capacidade de lidar simultaneamente com múltiplas arquiteturas, versões e até instalações de sistemas do tipo Slackware.
+
+O uso dos seguintes comandos só fará sentido à luz da próxima seção, onde trataremos a respeito de múltiplas instalações e jaulas num mesmo computador, porém é um pré-requisito para entendê-la.
+
+Supondo que você esteja rodando Slackware (arquitetura \emph{i386}) mas que queira atualizar a lista de pacotes do sistema Slamd64 versão \emph{11.0} (arquitetura \emph{x86\_64}), basta usar o comando
+
+\begin{verbatim}
+ARCH=x86_64 VERSION=11.0 simplaret update
+\end{verbatim}
+
+Esse comando baixará a lista de pacotes para o Slamd64 sem conflitar de nenhuma forma com a lista e os pacotes já baixados para o Slackware. Isso acontece porque o \emph{simplaret} armazena as informações e os pacotes de cada repositório em pastas próprias, organizadas de acordo com a arquitetura e versão.
+
+Passar as variaveis \emph{ARCH} e \emph{VERSION} para o \emph{simplaret} é opcional. Se qualquer uma delas não foi especificada, o \emph{simplaret} utilizará o valor padrão do seu sistema, usualmente obtido do arquivo \emph{/etc/slackware-version} ou então especificada através do arquivo de configuração do simplepkg.
+
+Por exemplo, para pesquisar por um pacote da arquitetura powerpc (distribuição Slackintosh) na versão \emph{11.0}, basta o comando
+
+\begin{verbatim}
+ARCH=powerpc VERSION=11.0 simplaret search nome-do-pacote
+\end{verbatim}
+
+Todos os comandos apresentados anteriormente funcionarão dessa maneira, à exceção daqueles que instalam ou fazer a atualização de pacotes, já que em geral é destrutivo misturar pacotes de arquiteturas e versões diferentes num mesmo sistema.
+
+\section{Trabalhando com múltiplas instalações}
+
+A funcionalidade apresentada na seção anterior só faz sentido quando existirem sistemas, jaulas e/ou vservers instalados num mesmo computador.
+
+Suponha que você possua uma máquina \emph{x86\_64} com três sistemas instalados:
+
+  - Slamd64 \emph{11.0} na raíz
+  - Slackware \emph{11.0} em \emph{/mnt/slackware-1}
+  - Slackware \emph{10.2} em \emph{/mnt/slackware-2}
+
+No caso da instalação de pacotes, da obtenção e aplicação de atualizações, o \emph{simplaret} suporta a variável de ambiente ROOT para especificar qual é a pasta na qual o \emph{simplaret} deve buscar o sistema.
+
+Para instalar um pacote no Slackware contido em /mnt/slackware-1, basta usar os comandos
+
+\begin{verbatim}
+ARCH=i386 VERSION=11.0 simplaret update
+ROOT=/mnt/slackware-1 simplaret install nome-do-pacote
+\end{verbatim}
+
+O primeiro comando apenas atualiza a lista de pacotes e o segundo faz com que o \emph{simplaret} baixe o pacote da arquitetura e versão do sistema presente em \emph{/mnt/slackware-1} bem como efetue sua instalação.
+
+Para o caso da instalação em \emph{/mnt/slackware-2}, o uso é análogo:
+
+\begin{verbatim}
+ARCH=i386 VERSION=10.2 simplaret update
+ROOT=/mnt/slackware-2 simplaret install nome-do-pacote
+\end{verbatim}
+
+Existe ainda uma facilidade para que a obtenção e aplicação de atualizações seja feita de forma única, através do arquivo \emph{/etc/simplepkg/jailist}. Esse arquivo serve, além de outros propósitos descritos na documentação do simplepkg, para que o \emph{simplaret} saiba de antemão quais são as instalações de sistema do tipo Slackware presentes numa máquina, além da instalação principal na raíz do sistema.
+
+Considerando que a máquina possua as três instalações citadas no início deste tópico, a atualização automática das mesmas pode ser feita quando o arquivo \emph{/etc/simplepkg/jailist} contiver as seguintes linhas (sem espaços no início de cada uma):
+
+\begin{verbatim}
+/mnt/slackware-1
+/mnt/slackware-2
+\end{verbatim}
+
+O sistema principal, contido na raíz do sistema, não precisa estar listado nesse arquivo. Se todas as suas instalações de sistema do tipo Slackware estiverem constando corretamente no \emph{/etc/simplepkg/jailist}, o seguinte comando baixará as atualizações disponíveis para todas elas, incluindo o sistema contido na raíz:
+
+\begin{verbatim}
+simplaret get-patches
+\end{verbatim}
+
+Analogamente, o seguinte comando baixará e/ou aplicará todas as atualizações disponíveis em todas as instalações, incluindo o sistema contido na raíz:
+
+\begin{verbatim}
+simplaret upgrade
+\end{verbatim}
+
+Desse modo, o gerenciamento de pacotes numa máquina que contenha mais de uma instalação do tipo Slackware fica unificada e consequentemente simplificada.
+
+\section{O arquivo repos.conf}
+
+Agora que o comportamento do \emph{simplaret} foi delineado, é importante descrever o arquivo de definição de repositórios, o \emph{/etc/simplepkg/repos.conf}. Se você não pretende fazer um uso avançado do \emph{simplaret}, provavelmente pode deixar de ler esta e a próxima seção, já que para o uso corriqueiro do \emph{simplaret} você provavelmente não precisará alterar seu \emph{repos.conf}, a não ser que queira mudar o espelho de download dos seus pacotes ou montar um esquema avançado para a escolha e priorização de repositórios.
+
+O arquivo \emph{/etc/simplepkg/repos.conf} contém uma definição de repositório por linha e a sintaxe de cada uma delas é:
+
+\begin{verbatim}
+TIPO[-ARQUITETURA][-VERSAO]="nome%URL"
+\end{verbatim}
+
+O conteúdo demarcado por colchetes é opcional dependendo do tipo de repositório, como veremos a seguir. Os tipos de repositório aceitos pelo \emph{simplaret} são:
+
+\subsection{PATCHES}
+
+\emph{PATCHES}: definição para repositórios que contenham patches (pacotes de atualização) e cuja lista de arquivos é \emph{FILE\_LIST} e não \emph{FILELIST.TXT}; exemplo:
+
+\begin{verbatim}
+PATCHES-i386-11.0="fluxo%http://slack.fluxo.info/packages/slackware/slackware-11.0/patches/"
+\end{verbatim}
+
+No caso da definição acima, temos um repositório de patches para a arquitetura \emph{i386} (distribuição Slackware), versão \emph{11.0} e o nome dado ao repositório é "fluxo".
+
+Possuir uma definição do tipo \emph{PATCHES} é opcional para ter acesso às atualizações: a definição de repositório \emph{ROOT}, que veremos em seguida, já lida com patches: o tipo de repositório \emph{PATCHES} serve apenas se você quiser utilizar algum repositório não-oficial como fonte de patches prioritária, já que repositório \emph{PATCHES} são pesquisados pelo \emph{simplaret} antes de qualquer outro.
+
+Em resumo, se você não tiver um bom motivo para usar esse tipo de repositório, evite-o.
+
+\subsection{ROOT}
+
+\emph{ROOT}: são tipos de repositórios cujo conteúdo está dividido por versão. O exemplo tradicional deste caso é o próprio repositório oficial das distribuições:
+
+\begin{verbatim}
+ROOT-i386="tds%http://slackware.mirrors.tds.net/pub/slackware/"
+\end{verbatim}
+
+Repositórios \emph{ROOT} necessitam apenas de uma definição de arquitetura, um nome e uma URL. No caso acima, temos a definição de repositório \emph{ROOT} de nome "tds", ou seja, não há definição de versão, já que o \emph{simplaret} considerará que a versão desejada está numa subpasta dessa URL. Ou seja, definições ROOT implicam que as pastas contendo pacotes de cada versão estejam bem separadas, ou seja, pastas como http://slackware.mirrors.tds.net/pub/slackware/slackware-10.2/ e http://slackware.mirrors.tds.net/pub/slackware/slackware-11.0/.
+
+\subsection{REPOS}
+
+\emph{REPOS}: este tipo de repositório é orientado a arquitetura e versão, como por exemplo
+
+\begin{verbatim}
+REPOS-i386-11.0="fluxo%http://slack.fluxo.info/packages/slackware/slackware-11.0/"
+\end{verbatim}
+
+No caso acima, um repositório de nome "fluxo" é definido para a arquitetura \emph{i386} e versão \emph{11.0} com a URL http://slack.fluxo.info/packages/slackware/slackware-11.0/. Esse tipo de definição é recomendado para repositórios não-oficiais.
+
+\subsection{NOARCH}
+
+\emph{NOARCH}: o último tipo de definição é usado para repositórios cujos pacotes são independentes de arquitetura e versão da distribuição. Como exemplo temos um repositório do Projeto Slack:
+
+\begin{verbatim}
+NOARCH="fluxo%http://slack.fluxo.info/packages/noarch"
+\end{verbatim}
+
+Em qualquer tipo de repositório, a URL pode ser do tipo http://, ftp:// ou file:// (para repositórios locais).
+
+\section{Ordem e precedência em repositórios}
+
+Como podem haver mais de uma definição de repositório para cada tipo, versão e/ou arquitetura, as mesmas são diferenciadas de acordo com o nome. Definições de repositório podem ter nomes idênticos, desde que se refiram a tipo de repositório e/ou arquitetura e versão diferentes.
+
+Existe ainda uma prioridade dentre tipos de repositório e ordens de precedência. Numa pesquisa, repositórios são pesquisados de acordo com a seguinte ordem:
+
+\begin{enumerate}
+\item \emph{PATCHES} tem prioridade mais alta: caso um pacote de uma dada arquitetura e versão não seja encontrado no primeiro repositório \emph{PATCHES} do \emph{repos.conf}, o próximo repositório definido na ordem em que ele aparece no arquivo é pesquisado, e assim por diante.
+\item Em seguida, pacotes são procurados nas definições \emph{ROOT} da arquitetura em questão, na ordem em que aparecem no \emph{repos.conf}.
+\item Depois, são os pacotes de repositórios \emph{REPOS} daquela arquitetura e versão são pesquisados, na ordem em que aparecem no repos.conf.
+\item Por fim, repositórios \emph{NOARCH} são pesquisados, na ordem em que são definidos.
+\end{enumerate}
+
+Em resumo, o \emph{simplaret} tem uma ordem de precedência e execução de repositórios e para busca e obtenção de pacotes: pacotes são exibidos de acordo com a ordem e precedência descritas acima. No caso da ontenção de pacotes, o primeiro repositório que possuí-lo será utilizado, isto é, caso o pacote não for solicitado explicitamente com seu nome de arquivo completo mas sim apenas com seu nome.
+
+No caso da obtenção de patches, por padrão apenas repositórios do tipo \emph{PATCHES} e \emph{ROOT} são pesquisados, a não ser que isso seja configurado como contrário.
+
+Em repositórios do tipo \emph{REPOS} e \emph{ROOT} ainda é possível, através de parâmetros de configuração, explicitar a ordem de pastas que são pesquisadas dentro dos repositórios, algo que veremos a seguir e facilita no caso do usuário estar interessado em dar prioridade para aplicativos em fase de testes (usualmente armazenados na pasta testing/) ou pacotes antigos (pasture).
+
+\section{Parâmetros de configuração do simplepkg.conf}
+
+Nesta seção os parâmetros do arquivo de configuração \emph{/etc/simplepkg/simplepkg.conf} relevantes ao \emph{simplaret} estão descritos. Para uma lista completa de todos os parâmetros disponíveis, consulte o simplepkg.conf contido no pacote do simplepkg. Aqui estão descritos apenas os principais, que são:
+
+\begin{itemize}
+\item \emph{STORAGE}: local de armazenameto dos pacotes baixados e das informações de repositório. O valor padrão é \emph{/var/simplaret/packages}.
+
+\item \emph{PATCHES\_DIR}: local de armazenamento de pacotes que são patches (atualizações), isto é, o local de armazenamento de pacotes de repositórios do tipo PATCHES (e eventualmente de patches encontrados em repositórios do tipo \emph{ROOT}, como veremos a seguir). O valor padrão é \emph{/var/simplaret/patches}.
+
+\item \emph{SIMPLARET\_DOWNLOAD\_FROM\_NEXT\_REPO}: indica se o \emph{simplaret} deve tentar baixar um pacote do próximo repositório (caso exista) quando o download do repositório atual tiver falhado.  Valores possíveis são "1" ou "yes" para habilitar a opção (que é o comportamento padrão) ou "0" ou "no" para desabilitá-la.
+
+\item \emph{SIMPLARET\_PURGE\_PATCHES}: indica se o conteúdo da pasta de patches também deve ser apagado quando o comando "simplaret --purge" é chamado. Use "yes" ou "1" para habilitar e "no" ou "0" para desabilitar. O valor padrão é "1".
+
+\item \emph{SIMPLARET\_PURGE\_WEEKS}: controla o número de semanas a partir do qual o \emph{simplaret} irá apagar pacotes quando chamado com o comando "simplaret --purge", o que é equivalente a usar o comando "simplaret --purge -w N". O valor padrão é "3". Para desabilitar essa opção, atribua o valor "0".
+
+\item \emph{PASSIVE\_FTP}: Indica se o \emph{simplaret} deve fazer as transferências de FTP no modo passivo. O valor padrão é "1" (habilitado).
+
+\item \emph{HTTP\_TOOL}: especifica qual a ferramenta para obtenção de arquivos via protocolo HTTP. As opções disponíveis são "curl" e "wget", sendo que a opção padrão é "curl".
+
+\item \emph{FTP\_TOOL}: especifica qual a ferramenta para obtenção de arquivos via protocolo FTP. As opções disponíveis são "curl", "wget" e "ncftpget", sendo que a opção padrão é "curl".
+
+\item \emph{CONNECT\_TIMEOUT}: tempo máximo de espera para uma conexão de rede, dado em segundos. O valor padrão é "20".
+
+\item \emph{ROOT\_PRIORITY}: especifica a ordem de prioridades das pastas de repositórios do tipo \emph{ROOT} numa pesquisa. O valor padrão é "patches slackware extra testing pasture", indicando que a pasta de patches tem precedência sobre todas as outras no repositório, sendo seguida pela pasta slackware e depois pelas extra, testing e pasture. Como podem existir nomes de pacotes idênticos nessas pastas, o estabelecimento de uma ordem se faz necessária.
+  
+\item \emph{REPOS\_PRIORITY}: da mesma forma como repositorios \emph{ROOT} necessitam de uma prioridade de pesquisa em pastas, este parâmetro de configuração especifica a prioridade de pastas em repositórios do tipo \emph{REPOS}. O valor padrão é "patches slackware extra testing pasture".
+  
+\item \emph{SIGNATURE\_CHECKING}: indica se o \emph{simplaret} deve checar pela assinatura dos pacotes baixados, caso ela esteja disponível. Você deve ter a chave pública do distribuidor dos pacotes no seu chaveiro. O valor padrão é "0" (desabilitado).
+  
+\item \emph{DEPENDENCY\_CHECKING}: indica se o \emph{simplaret} deve trabalhar com a resuloção de dependências caso ele encontre, no repositório, um arquivo slack-required correspondente ao pacote que está sendo instalado. O valor padrão é "1" (habilitado).
+  
+\item \emph{DOWNLOAD\_EVEN\_APPLIED\_PATCHES}: indica de o \emph{simplaret} deve baixar todos os patches disponíveis a uma dada instalação de sistema do tipo Slackware, mesmo que os mesmo já se encontrem aplicados. Esta opção é útil se você quiser manter uma cópia local das atualizações existentes para seu sistema. O valor padrão é "0" (desabilitado).
+  
+\item \emph{CONSIDER\_ALL\_PACKAGES\_AS\_PATCHES}: especifica se o \emph{simplaret} deve, durante a obtenção de pacotes de atualização, procurar por atualizações também nos tipos de repositórios \emph{REPOS} e \emph{NOARCH}. Com essa opção, o \emph{simplaret} faz uma pesquisa pelo pacote e, se sua versão ou buildnumber da primeira ocorrência não bater com as do pacote atualmente instalado, ele baixa e o aplica, mesmo que seja um pacote de repositórios do tipo \emph{REPOS} ou \emph{NOARCH}.  O valor padrão é "0" (desabilitado). O uso dessa opção não é muito recomendado por poder causar confusão e deixar o \emph{simplaret} mais lento, mas pode ser útil caso você esteja usando um repositório não-oficial que sempre atualiza seus pacotes.
+  
+\item \emph{STORE\_ROOT\_PATCHES\_ON\_PATCHES\_DIR}: controla se o \emph{simplaret} deve armazenar os patches baixados de repositórios do tipo \emph{ROOT} na mesma pasta de armazenamento de patches provenientes de repositórios do tipo \emph{PATCHES}. É uma opção útil apenas se você quiser manter todos os patches de repositórios \emph{ROOT} e \emph{PATCHES} num mesmo local. O valor padrão é "0" (desabilitado).
+\end{itemize}
+
+Vale lembrar que todas as opções booleanas (isto é, que podem ser apenas habilitadas ou desabilitadas)
+do simplepkg.conf tem os seguintes valores permitidos: "1" e "yes" para habilitado e "0" ou "no" para
+desabilitado.
+
+\section{Mas pra quê serve isso?}
+
+Você pode estar se perguntando: para que mais um gerenciador de pacotes para o Slackware e quem utilizaria
+uma ferramenta que baixa pacotes de várias arquiteturas?
+
+O \emph{simplaret} foi escrito tendo em mente um ambiente \emph{*86} onde várias \emph{jaulas} de diferentes arquiteturas estão instaladas. Suponha por exemplo uma máquina \emph{x86\_64} que possua as seguintes jaulas:
+
+\begin{itemize}
+  \item slamd64 \emph{11.0}
+  \item slackware \emph{11.0}
+  \item slackware \emph{11.0} com pacotes adicionais em \emph{i686}
+  \item \htmladdnormallink{uSlack}{http://gnuden.fluxo.org} (\emph{uClibc para i386})
+\end{itemize}
+
+O condenado/a em questão que roda todas essas jaulas, pelos mais diversos motivos, pode ter uma grande dor de cabeça para manter os pacotes em ordem de forma manual. Com o \emph{simplaret} e eventualmente com o \emph{simplepkg}, a tarefa se torna trivial.
+
+Além disso, as inúmeras novas tecnologias de virtualização poderão necessitar de um sistema de gerenciamento de pacotes que trabalha simultaneamente com múltiplas arquiteturas e versões.
+
+Mesmo que você possua apenas um único sistema do tipo Slackware em seu computador ou trabalhe apenas com uma única arquitetura e/ou versão, o \emph{simplaret} possui todas as funcionalidades necessárias para facilitar seu dia-a-dia de gerenciamento de pacotes.
+
+\section{Mais informações}
+
+O \emph{simplaret} foi escrito por Silvio Rhatto (rhatto at riseup.net) e é disponibilizado dentro do pacote do
+simplepkg e sob a licença GPL. Para obter o código fonte, digite
+
+\begin{verbatim}
+svn checkout http://slack.fluxo.info/simplepkg
+\end{verbatim}
+
+O wiki de desenvolvimento é \htmladdnormallink{http://slack.fluxo.info/trac/wiki/Simplepkg}{http://slack.fluxo.info/trac/wiki/Simplepkg} e o endereço da lista de discussão utilizada para discussões sobre \emph{simplaret}, simplepkg ou mesmo distribuições e pacotes do tipo Slackware é \htmladdnormallink{http://listas.fluxo.org/wws/info/slack}{http://listas.fluxo.org/wws/info/slack}.
+
+\end{document}
+

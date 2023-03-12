@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+#  add-slack-required is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by the
+#  Free Software Foundation; either version 2 of the License, or any later version.
+#
+#  add-slack-required is distributed in the hope that it will be useful, but WITHOUT
+#  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+# add slack-required files in an existing repository
+# by rhatto at riseup.net
+#
+
+COMMON="/usr/libexec/simplepkg/common.sh"
+BASENAME="`basename $0`"
+
+if [ -z "$2" ]; then
+  echo "usage: $BASENAME /path/to/slackbuilds /path/to/packages"
+  exit 1
+elif [ ! -d "$1" ]; then
+  echo "$BASENAME: folder not found: $1"
+  exit 1
+elif [ ! -d "$2" ]; then
+  echo "$BASENAME: folder not found: $2"
+  exit 1
+fi
+
+slackbuild="$1"
+repository="$2"
+
+# we need the function package_name
+if [ -f "$COMMON" ]; then
+  source $COMMON
+else
+  echo "error: file $COMMON found, check your $BASENAME installation"
+  exit 1
+fi
+
+function search_and_copy_slackbuild {
+
+  if [ -f "$1" ]; then
+    echo Copying `basename $1` to `dirname $package`/$pack.slack-required
+    cp $1 `dirname $package`/$pack.slack-required
+    svn add `dirname $package`/$pack.slack-required 2> /dev/null
+  fi
+
+}
+
+for package in `find $repository/ $(pkg_ext_find)`; do
+  pack="`package_name $package`"
+  for build_script in `find $slackbuild/ -name $pack.SlackBuild`; do
+
+    search_and_copy_slackbuild `dirname $build_script`/slack-required
+    search_and_copy_slackbuild `dirname $build_script`/$pack.slack-required
+
+  done
+done
+

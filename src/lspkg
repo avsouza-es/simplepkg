@@ -1,0 +1,148 @@
+#!/bin/bash
+#
+# lspkg v0.4: view installed and contents of slackware packages
+#
+# feedback: rhatto at riseup.net | gpl
+#
+#  Lspkg is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  Lspkg is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+
+COMMON="/usr/libexec/simplepkg/common.sh"
+PKG_LIST_DIR="var/log/packages"
+
+if [ -f "$COMMON" ]; then
+    source $COMMON
+else
+    echo "error: file $COMMON not found, check your `basename $0` installation"
+    exit 1
+fi
+
+function head_line {
+    echo "usage: [ROOT=/otherroot] `basename $0` [option expression]"
+}
+
+function usage {
+    head_line
+    echo "
+options are:
+
+   -v, --view <package_name>
+            view installed package contents
+   -p, --print <package_name>
+            print the contents of a package file
+   -r, --remove <package_name>
+            remove matching packages
+   -s, --search <file_name>
+            search a file under installed packages
+   -d, --description <package_name>
+            show matching packages' descriptions
+"
+}
+
+# -----------------------------------------------------
+#                       lspkg
+# -----------------------------------------------------
+
+if [ $# -eq 2 ]; then
+  pack=$2
+elif [ $# -eq 1 ]; then
+  pack=$1
+else
+  pack=""
+fi
+
+if [ ! -z "$pack" ]; then
+  if echo $pack | grep -q "*"; then
+    LIST_PKGS="`ls -1 /$ROOT/$PKG_LIST_DIR/$pack 2> /dev/null`"
+  else
+    pack="`echo $pack | sed -e 's/\+/\\\+/'`"
+    LIST_PKGS=`eval "ls -1 /$ROOT/$PKG_LIST_DIR/ 2> /dev/null | grep -E '^$pack-[^-]+-[^-]+-[^-]+$'"`
+  fi
+else
+  LIST_PKGS="`ls /$ROOT/$PKG_LIST_DIR/ 2> /dev/null`"
+fi
+
+LIST_PKGS="`slash $LIST_PKGS`"
+
+case $1 in
+    "-h"|"--help")
+        usage
+    ;;
+    "-v"|"--view")
+        if [ ! -z "$2" ]; then
+            if [ ! -z "$LIST_PKGS" ]; then
+                for file in $LIST_PKGS; do
+                    less /$PKG_LIST_DIR/$file
+                done
+            else
+                if [ ! -z "$ROOT" ]; then
+                    echo "$2: package not found on /$ROOT/$PKG_LIST_DIR"
+                    exit 1
+                else
+                    echo "$2: package not found on /$PKG_LIST_DIR"
+                    exit 1
+                fi
+            fi
+        else
+            head_line
+            exit 1
+        fi
+    ;;
+    "-p"|"--print")
+        if [ -f "$2" ]; then
+            tar ztvf $2
+        else
+            echo $2: file not found
+        fi
+    ;;
+    "-r"|"--remove")
+        if [ ! -z "$2" ]; then
+            if [ ! -z "$LIST_PKGS" ]; then
+                removepkg /$ROOT/$PKG_LIST_DIR/$1-[0-9]*
+            fi
+        fi
+    ;;
+    "-s"|"--search")
+        if [ ! -z "$2" ]; then
+            eval "grep -l '\/$2$' /$ROOT/$PKG_LIST_DIR/*"
+        fi
+    ;;
+    "-d"|"--description")
+        if [ ! -z "$2" ]; then
+            for file in $LIST_PKGS; do
+                pack="`package_name $file`"
+                echo -e " Package description for $file:\n"
+                sed -n "/^$pack:/ { s/$pack://; p; }" $file
+            done
+        else
+            head_line
+            exit 1
+        fi
+    ;;
+    *)
+        if [ ! -z "$LIST_PKGS" ]; then
+            for pack in $LIST_PKGS; do
+              echo $pack
+            done
+        else
+            if [ ! -z "$ROOT" ]; then
+                echo "$1: package not found on /$ROOT/$PKG_LIST_DIR"
+                exit 1
+            else
+                echo "$1: package not found on /$PKG_LIST_DIR"
+                exit 1
+            fi
+        fi
+    ;;
+esac
+

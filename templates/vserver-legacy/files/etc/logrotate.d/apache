@@ -1,0 +1,11 @@
+/var/log/apache/access_log /var/log/apache/error_log {
+    monthly
+    nomail
+    compress
+    create 0664 root root
+    rotate 12
+    postrotate
+      /etc/rc.d/rc.httpd restart > /dev/null
+    endscript
+}
+

@@ -1,0 +1,1904 @@
+#!/bin/bash
+#
+# mkbuild: SlackBuild script maker
+# feedback: rudsonaalves at yahoo.com.br
+#
+#  mkbuild is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  mkbuild is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+# Based in model generic.SlackBuild from Luis
+# Version $Rev$ - $Author$
+#
+
+#--------------------------------------------------------------------
+# Functions
+#--------------------------------------------------------------------
+
+function mkbuild_use {
+
+  # mkbuild help function
+  echo -e "${red}NAME${normal}
+        mkbuild - create SlackBuild script from ${green}.mkbuild${normal} input file
+
+${red}SYNOPSIS
+        mkbuild${normal} [${green}OPTIONS${normal}] [${green}mkbuild_file${normal}]
+
+${red}DESCRIPTION${normal}
+        [${green}mkbuild_file${normal}] input file with build rules and variables
+
+        Input ${green}OPTIONS${normal}:
+            ${red}-a${normal}, ${red}--author${normal} ${green}<author_name>${normal}
+                author name
+            ${red}-ai${normal}, ${red}--author_initials${normal} ${green}<initials>${normal}
+                author signature
+            ${red}-bn${normal}, ${red}--build-number${normal}
+                change build number
+            ${red}-cs${normal}, ${red}--const_string${normal} ${green}<string>${normal}
+                construction string to source name
+            ${red}-j${normal}, ${red}--jobs${normal} ${green}<jobs_number>${normal}
+                Number of jobs to run simultaneously
+            ${red}-md${normal}, ${red}--model${normal} ${green}<SlackBuild_model>${normal}
+                SlackBuild model file
+            ${red}-npss${normal}, ${red}--nps-strip${normal}
+                Number of prefix slashes to strip
+            ${red}-pf${normal}, ${red}--patch-files${normal}
+                List of patch files
+            ${red}-pn${normal}, ${red}--pkg_name${normal} ${green}<package_name>${normal}
+                package name
+            ${red}--prefix${normal} <install_dir>${normal}
+                Prefix install directory
+            ${red}-pv${normal}, ${red}--pkg_version${normal} ${green}<version>${normal}
+                package version
+            ${red}-sn${normal}, ${red}--src_name${normal} ${green}<source_name>${normal}
+                source name
+            ${red}-u${normal}, ${red}--url${normal} ${green}<url_address>${normal}
+                url address to source
+
+        Program options:
+        ${red}-d${normal}, ${red}--debug${normal}
+            enable debug mode
+        ${red}-ss${normal}, ${red}--submit-slackbuild${normal}
+            submit SlackBuilds in local svn SlackBuild tree
+        ${red}-sm${normal}, ${red}--submit-mkbuild${normal}
+            submit .mkbuild in local svn mkbuild tree
+        ${red}-sa${normal}, ${red}--submit-all${normal}
+            submit SlackBuild and .mkbuild files in local svn tree
+        ${red}-cs${normal}, ${red}--commit-slackbuild${normal}
+            commit SlackBuilds in svn SlackBuild tree
+        ${red}-cm${normal}, ${red}--commit-mkbuild${normal}
+            commit .mkbuild in svn mkbuild tree
+        ${red}-ca${normal}, ${red}--commit-all${normal}
+            commit SlackBuild and .mkbuild files in svn tree
+        ${red}-im${normal}, ${red}--import-mkbuilds${normal}
+            import mkbuild repository in a svn tree
+        ${red}-is${normal}, ${red}--import-slackbuilds${normal}
+            import SlackBuild repository in a svn tree
+        ${red}-ia${normal}, ${red}-i${normal}, ${red}--import-all${normal}, ${red}--import${normal}
+            import mkbuild and SlackBuild repositories in a svn tree
+        ${red}--status${normal}
+            print mkbuild and SlackBuild svn repositories status
+        ${red}-ls${normal}, ${red}--list${normal}
+            list mkbuild folder contents
+        ${red}-h${normal}, ${red}--help${normal}
+            this help mesage
+        ${red}-n${normal}, ${red}--new${normal} ${green}<mkbuild_name>${normal}
+            start a new mkbuild configure file
+        ${red}-s${normal}, ${red}--search${normal} ${green}<mkbuild_name>${normal}
+            search for a ${green}<mkbuild_name>${normal} file
+        ${red}--sync${normal}
+            synchronize mkbuilds repository
+        ${red}-v${normal}, ${red}--version${normal}
+            program version
+        ${red}-V${normal}, ${red}--verbose${normal}
+            print debug information
+        ${red}-e${normal}, ${red}--edit${normal}
+            edit a mkbuild
+        ${red}-um${normal}, ${red}--update-manifest${normal}
+            update manifest file
+        ${red}-wc${normal}, ${red}--working-copy${normal}
+            create an unversioned mkbuild working copy
+        ${red}--get-param-copy${normal}
+            get a parameter from a given mkbuild
+
+${red}EXAMPLES${normal}
+        ${red}mkbuild -sa pyrex.mkbuild${normal}
+            build pyrex.SlackBuild and submit .mkbuild and .SlackBuild in
+            Slack.Sarava local tree.
+        ${red}mkbuild -a \"Jose Araujo\" -ai \"ja\" -n pyrex${normal}
+            make a basic pyrex.mkbuild with author name \"Jose Araujo\" and
+            author signature \"ja\".
+        ${red}mkbuild --prefix /usr/local pyrex.mkbuild${normal}
+            build pyrex.SlackBuild with prefix /usr/local and pyrex.mkbuild
+            variables and options definitions.
+
+${red}AUTHOR${normal}
+        Written by ${blue}Rudson R. Alves${normal}
+
+${red}AVAILABILITY${normal}
+        by svn: ${yellow}svn checkout http://slack.fluxo.info/simplepkg${normal}
+
+${red}REPORTING BUGS${normal}
+        Report bugs to <${blue}rudsonaalves[at]rra.etc.br${normal}>
+
+${red}COPYRIGHT${normal}
+        Copyright © 2006 Free Software Foundation, Inc.
+        This is free software. You may redistribute copies of it under the
+        terms of the GNU General Public License
+        <${yellow}http://www.gnu.org/licenses/gpl.html${normal}>. There is NO WARRANTY,
+        to the extent permitted by law."
+}
+
+function set_parameters {
+
+  # Get and set mkbuild variables with parameters input
+  # Use: set_parameters $@
+  #           where $@ are the parameters input
+  #
+  # Parameter evaluation
+  ACTION="build"
+
+  local search match
+
+  while [ "$1" ]; do
+    case $1 in
+      '-bn'|'--build-number')
+        # Build Number
+        BUILD_NUMBER=$2
+        is_number $BUILD_NUMBER || handle_error "$ERROR_NOT_NUMBER" "--build-number"
+        shift
+      ;;
+      '-ss'|'--submit-slackbuild')
+        # Submit SlackBuild file
+        SUBMIT_SLACKBUILD=$on
+      ;;
+      '-sm'|'--submit-mkbuild')
+        # Submit mkbuild file
+        SUBMIT_MKBUILD=$on
+      ;;
+      '-sa'|'--submit-all')
+        # Submit SlackBuild and mkbuild file
+        SUBMIT_SLACKBUILD=$on
+        SUBMIT_MKBUILD=$on
+      ;;
+      '-cs'|'--commit-slackbuild')
+        # Commit SlackBuild file
+        ACTION="commit_slackbuild"
+        set_mkbuild_name $2
+        break # we need to break otherwise commit log message is evalued
+      ;;
+      '-cm'|'--commit-mkbuild')
+        # commit mkbuild file
+        ACTION="commit_mkbuild"
+        set_mkbuild_name $2
+        break # we need to break otherwise commit log message is evalued
+      ;;
+      '-ca'|'--commit-all')
+        # Commit SlackBuild and mkbuild file
+        ACTION="commit_all"
+        set_mkbuild_name $2
+        break # we need to break otherwise commit log message is evalued
+      ;;
+      '-is'|'--import-slackbuilds')
+        # Import SlackBuilds
+        ACTION="import_slackbuilds"
+        set_mkbuild_name $2
+        break # we need to break otherwise specific arguments are evalued
+      ;;
+      '-im'|'--import-mkbuilds')
+        # Import mkbuilds
+        ACTION="import_mkbuilds"
+        set_mkbuild_name $2
+        break # we need to break otherwise specific arguments are evalued
+      ;;
+      '-ia'|'-i'|'--import-all'|'--import')
+        # Import SlackBuilds and mkbuilds
+        ACTION="import_all"
+        set_mkbuild_name $2
+        break # we need to break otherwise specific arguments are evalued
+      ;;
+      '-ds'|'--delete-slackbuild')
+        # Delete SlackBuild
+        ACTION="delete_slackbuild"
+        set_mkbuild_name $2
+        break # we need to break otherwise specific arguments are evalued
+      ;;
+      '-dm'|'--delete-mkbuild')
+        # Delete mkbuild
+        ACTION="delete_mkbuild"
+        set_mkbuild_name $2
+        break # we need to break otherwise specific arguments are evalued
+      ;;
+      '-da'|'--delete-all')
+        # Delete mkbuild and SlackBuild
+        ACTION="delete_all"
+        set_mkbuild_name $2
+        break # we need to break otherwise specific arguments are evalued
+      ;;
+      '--status')
+        # Repository status
+        ACTION="status"
+        set_mkbuild_name $2
+        break # we need to break otherwise specific arguments are evalued
+      ;;
+      '-ls'|'--list')
+        # List mkbuild folder contents
+        ACTION="list"
+        set_mkbuild_name $2
+        break # we need to break otherwise specific arguments are evalued
+      ;;
+      '-um'|'--update-manifest')
+        ACTION="update_manifest"
+        set_mkbuild_name $2
+        SOURCE_FILE="$3"
+        shift 2
+      ;;
+      '-n'|'--new')
+        # New mkbuild configure file
+        set_mkbuild_name $2
+        ACTION="new"
+        shift
+      ;;
+      '-s'|'--search')
+        # Search for a mkbuild file
+        set_mkbuild_name $2
+        ACTION='search'
+      ;;
+      '-e'|'--edit')
+        # Open mkbuild with $EDITOR
+        set_mkbuild_name $2
+        ACTION='edit'
+        break # we need to break otherwise specific arguments are evalued
+      ;;
+      '-wc'|'--working-copy')
+        # Create an unversioned mkbuild working copy
+        set_mkbuild_name $2
+        ACTION='working_copy'
+        break # we need to break otherwise specific arguments are evalued
+      ;;
+      '--get-param')
+        # Get parameter for a given mkbuild
+        set_mkbuild_name $2
+        ACTION='get_param'
+        break # we need to break otherwise specific arguments are evalued
+      ;;
+      '-d'|'--debug')
+        # Debug mode
+        set -x
+      ;;
+      '-h'|'--help' )
+        # Show help mesage
+        mkbuild_use && exit 0
+      ;;
+      '--sync' )
+        # Synchronize mkbuilds repository
+        mkbuild_update_keyring
+        sync_svn_repo $MKBUILDS_DIR $MKBUILDS_SVN
+        exit $?
+      ;;
+      '-v'|'--version')
+        # Show program version
+        eecho $normal "\n$BASENAME version $PROG_VERSION\n"
+      ;;
+      '-V' | '--verbose')
+        # Enable verbose mode
+        VERBOSE=1
+      ;;
+      '-a'|'--author')
+        # Enter with author name
+        AUTHOR=$2
+        [ ${AUTHOR:0:1} = "-" ] && handle_error $ERROR_MKBUILD_INPUT_PAR AUTHOR
+        shift
+      ;;
+      '-ai'|'--author_initials')
+       # Enter with author name
+       AUTHOR_INITIALS=$2
+       [ ${AUTHOR_INITIALS:0:1} = "-" ] && handle_error $ERROR_MKBUILD_INPUT_PAR AUTHOR_INITIALS
+       shift
+      ;;
+      '-cs'|'--const_string')
+        # Enter with construction source name string
+        CONST_STRING=$2
+        [ ${CONST_STRING:0:1} = "-" ] && handle_error $ERROR_MKBUILD_INPUT_PAR CONST_STRING
+        shift
+      ;;
+      '-md'|'--model')
+        # Enter with SlackBuild model
+        MODEL=$2
+        [ ${MODEL:0:1} = "-" ] && handle_error $ERROR_MKBUILD_INPUT_PAR MODEL
+        shift
+      ;;
+      '-j'|'--jobs')
+        # Enter with SlackBuild model
+        NUMJOBS=$2
+        [ ${NUMJOBS:0:1} = "-" ] && handle_error $ERROR_MKBUILD_INPUT_PAR NUMJOBS
+        ! is_number $NUMJOBS &&  handle_error $ERROR_NOT_NUMBER NUMJOBS
+        NUMJOBS="-j$NUMJOBS"
+        shift
+      ;;
+      '--prefix')
+        # Enter with SlackBuild model
+        PREFIX=$2
+        [ ${PREFIX:0:1} = "-" ] && handle_error $ERROR_MKBUILD_INPUT_PAR PREFIX
+        shift
+      ;;
+      '-pn'|'--pkg_name')
+        # Enter with package name
+        PKG_NAME=$2
+        [ ${PKG_NAME:0:1} = "-" ] && handle_error $ERROR_MKBUILD_INPUT_PAR PKG_NAME
+        shift
+      ;;
+      '-pv'|'pkg_version')
+        # Enter with package version
+        VERSION=$2
+        [ ${VERSION:0:1} = "-" ] && handle_error $ERROR_MKBUILD_INPUT_PAR VERSION
+        shift
+      ;;
+      '-sn'|'--src_name')
+        # Enter with source name
+        SRC_NAME=$2
+        [ ${SRC_NAME:0:1} = '-' ] && handle_error $ERROR_MKBUILD_INPUT_PAR SRC_NAME
+        shift
+      ;;
+      '-u'|'--url')
+        # Enter with url address
+        URL=$2
+        [ ${URL:0:1} = '-' ] && handle_error $ERROR_MKBUILD_INPUT_PAR URL
+        shift
+      ;;
+      '-pf'|'--patch-files')
+        # Path files list
+        PATCH_FILES=$2
+        [ ${PATCH_FILES:0:1} = '-' ] && handle_error $ERROR_MKBUILD_INPUT_PAR PATCH_FILES
+        shift
+      ;;
+      '-npss'|'--nps-strip')
+        # Number of prefix slashes to strip
+        NPS_STRIP=$2
+        [ ${NPS_STRIP:0:1} = '-' ] && handle_error $ERROR_MKBUILD_INPUT_PAR NPS_STRIP
+        shift
+      ;;
+      *)
+        # mkbuild input file
+        set_mkbuild_name $1
+      ;;
+    esac
+    shift
+  done
+
+  if [ "${MKBUILD_NAME:0:1}" == "-" ]; then
+    echo "Invalid mkbuild name $MKBUILD_NAME"
+    exit 1
+  fi
+
+  if [ ! -e "$MKBUILD_NAME" ] && [ "$ACTION" != "search" ] &&  [ "$ACTION" != "status" ]; then
+
+    search="`search_mkbuild`"
+
+    if [ ! -z "$search" ]; then
+      for match in $search; do
+        MKBUILD_NAME="$match"
+        WORK="`dirname $match`"
+        break
+      done
+    else
+      if [ "$ACTION" == "build" ]; then
+        ACTION='new'
+      fi
+    fi
+
+  fi
+
+  MKBUILD_NAME="${MKBUILD_NAME//.mkbuild}.mkbuild"
+  MKBUILD_BASENAME="`basename $MKBUILD_NAME .mkbuild`"
+
+}
+
+function get_variable {
+
+  # Get variable value from mkbuild file (MKBUILD_NAME)
+  [ $# -ne 1 ] && handle_error $ERROR_PAR_NUMBER
+  [ -z $MKBUILD_NAME ] && echo "Warning: no [mkbuild_file]." && return 0
+
+  sed -n '1,/^#>>/ p' $MKBUILD_NAME | grep "^\[\[${1}\]\]" | tail -n 1 | cut -f2- -d= | sed -e 's/^"//' -e 's/"$//'
+
+}
+
+function edit_file {
+
+  # Edit file  $3, by change string [[$1]] to $2
+  [ $# -ne 3 ] && handle_error $ERROR_PAR_NUMBER
+
+  eval "sed -i 's¦\[\[$1\]\]¦$2¦g' $3"
+
+}
+
+function edit_file_full {
+
+  # Edit file  $3, by change string $1 to $2
+  [ $# -ne 3 ] && handle_error $ERROR_PAR_NUMBER
+
+  eval "sed -i 's¦$1¦$2¦' $3"
+
+}
+
+function start_build  {
+
+  # Build initial sections
+  [ $# -ne 1 ] && handle_error $ERROR_PAR_NUMBER
+
+  edit_file "SLACKBUILD AUTHOR" "$AUTHOR" $1
+  edit_file "SLACKBUILD AUTHOR INITIALS" "$AUTHOR_INITIALS" $1
+  edit_file "SOURCE NAME" "$SRC_NAME" $1
+  edit_file "PROGRAM NAME" "$PKG_NAME" $1
+  edit_file "PACKAGE NAME" "$PKG_NAME" $1
+  edit_file "DECOMPRESSOR" "$DECOMPRESSOR" $1
+  edit_file "DECOMPRESSOR TEST FLAG" "$DECOMPRESSOR_TEST_FLAG" $1
+  edit_file "PROGRAM URL" "$URL" $1
+  if [ "$ARCH" == "noarch" ]; then
+    sed -i 's/^ARCH=.*$/ARCH="noarch"/' $1
+  else
+    edit_file "ARCH" "$ARCH" $1
+  fi
+  edit_file "NUMBER OF JOBS" "$NUMJOBS" $1
+  edit_file "VERSION" "$VERSION" $1
+  edit_file "SOURCE NAME CONSTRUCTION STRING" "$CONST_STRING" $1
+  edit_file "EXTENSION" "$EXTENSION" $1
+  edit_file "MKBUILD COMPRESS" "$MKBUILD_COMPRESS" $1
+  edit_file "DOWNLOAD FOLDER URL" "$URL_BASE" $1
+  edit_file "OTHER CONFIGURE ARGS" "$OPTIONS" $1
+  edit_file "DOCUMENTATION FILES" "$DOCFILES" $1
+  edit_file "PREFIX" "$PREFIX" $1
+  edit_file "UNPACKER" "$UNPACKER" $1
+  edit_file "UNPACKER FLAGS" "$UNPACKER_FLAGS" $1
+  edit_file "BUILD NUMBER" "$BUILD_NUMBER" $1
+  edit_file "PATCH FILES" "$PATCH_FILES" $1
+  edit_file "NUMBER OF PREFIX SLASHES TO STRIP" "$NPS_STRIP" $1
+
+  edit_file_full "\$EXTENSION" "$EXTENSION" $1
+
+}
+
+function clear_files {
+
+  # Remove temporary files
+  [ ! -z $AUX_TMP ] && rm $AUX_TMP 2>/dev/null
+  [ ! -z $SLACKBUILD_TEMP ] && rm $SLACKBUILD_TEMP 2>/dev/null
+  [ ! -z $DIFF_FILE ] && rm $DIFF_FILE 2>/dev/null
+  if [ "`ls $TMP/`" == "" ]; then
+    rm -rf $TMP
+  fi
+  chmod 755 *.SlackBuild 2>/dev/null
+
+}
+
+function set_status {
+
+  # Set status section
+  # $1 - Section
+  # $2 - Status
+  # $3 - file
+  [ $# -ne 3 ] && handle_error $ERROR_PAR_NUMBER
+  if [ "`get_status $1 $3`" != "all" ]; then
+    verbose "Section $1 $2"
+    eval "sed -i 's/^<$1>.*$/<$1> $2/' $3"
+  else
+    echo "Warning: Section $1 have status all. Can't change!"
+  fi
+
+}
+
+function get_status {
+
+  # Get status from section
+  # $1 - Section
+  # $2 - file
+  [ $# -ne 2 ] && handle_error $ERROR_PAR_NUMBER
+  eval "sed '/^<$1>.*$/! d' $2"
+
+}
+
+function get_mkbuild_status {
+
+    # Get status from mkbuild file
+    # $1 section
+    eval "sed '/^#>>/,/<</ ! d; /^#/ d; /: *$1$/! d; s/^ *\(.*\):.*$/\1/' $MKBUILD_NAME"
+}
+
+function activate_sections {
+
+  # Enable and disable sections
+  ACTIONS_LIST=`sed '/^#>>/,/<</ ! d; /^#/ d ' $MKBUILD_NAME | tr -d ' '`
+  for i in $ACTIONS_LIST; do
+    STATUS=`echo $i | cut -f1 -d:`
+    SECTION=`echo $i | cut -f2 -d:`
+    set_status $SECTION $STATUS $SLACKBUILD_TEMP
+  done
+
+}
+
+function build_slackbuild {
+
+  # Clean SlackBuild
+  # Make SlackBuild backup
+  [ -e $SLACKBUILD ] && mv $SLACKBUILD $SLACKBUILD.old
+  # Remove off sections
+  sed -i '/^<[a-z].*> off/, /^<\/[a-z].*>$/ d' $SLACKBUILD_TEMP
+  # Remove sections names
+  sed -i '/^<.*$/ d' $SLACKBUILD_TEMP
+  # Remove clear lines
+  # isto pode ser feito com "cat -s SLACKBUILD_TEMP ..."
+  #sed -i ':i ; $! N; s/\n/Ø/ ; t i ; s/Ø\{3,\}/ØØ/g ; s/Ø/\n/g' $SLACKBUILD_TEMP
+  cat -s $SLACKBUILD_TEMP > $SLACKBUILD
+  # Remove from frist line do #!/... line
+  #sed '1,/^#\!/ {/^#\!/ b; d }' $SLACKBUILD_TEMP > $SLACKBUILD
+  sed -i '1,/^#\!/ {/^#\!/ b; d }' $SLACKBUILD
+
+}
+
+function section_edit {
+
+  # Edits a section substituting its content
+  [ -z $MKBUILD_NAME ] && return 0
+
+  SECTION_LIST=`grep '^#>[a-z]' $MKBUILD_NAME | cut -c3-`
+
+  # Check for sections change
+  [ -z "$SECTION_LIST" ] && return 0
+
+  # Change sections
+  for i in $SECTION_LIST; do
+    verbose "Change section $i"
+    if [ "$i" = "slackdesc" ]; then
+      # Special slackdesc section
+      slackdesc_edit > $AUX_TMP
+      mv $AUX_TMP $SLACKBUILD_TEMP
+    else
+      # Others sections
+      section_change $i
+    fi
+  done
+
+}
+
+function slackdesc_edit {
+
+  # Edit slackdesc section
+  sed -n '1,/|-----/ { /<slackdesc>/ b; /|-----/ b; p; }' $SLACKBUILD_TEMP
+  echo -n $PKG_NAME | tr [a-z+\-] " "
+  echo -n "|-----handy-ruler"
+  let N=18+${#PKG_NAME}
+  for i in `seq $N $SLACKDESC_LEN`; do
+    echo -n "-"
+  done
+  echo -en "|\n"
+
+  sed -n '/#>slackdesc/,/#<slackdesc/ { /^#/ b; p }' $MKBUILD_NAME
+  sed '1, /\[\[SLACK-DESC\]\]/ d' $SLACKBUILD_TEMP
+
+}
+
+function section_change {
+
+  # Change section lines
+  [ $# -ne 1 ] && handle_error $ERROR_PAR_NUMBER
+
+  # Copy first half
+  eval "sed '1,/^<$1>/! d' $SLACKBUILD_TEMP > $AUX_TMP"
+  # Paste new section
+  eval "sed -n '/#>$1/,/#<$1/ { /^#>/ b; /^#</ b; p }' $MKBUILD_NAME >> $AUX_TMP"
+  # Copy second halt
+  eval "sed '/^<\/$1>/,$ ! d' $SLACKBUILD_TEMP >> $AUX_TMP"
+
+  mv $AUX_TMP $SLACKBUILD_TEMP
+
+}
+
+function make_slack_required {
+
+  # Build slack-required file
+  [ -e $WORK/slack-required ] && mv $WORK/slack-required $WORK/slack-required.old
+  [ -z "$SLACK_REQUIRED" ] && return 0
+
+  echo -e "# Dependency list to $SRC_NAME\n#\n# dependency [condition] [version]]" > $WORK/slack-required
+
+  echo $SLACK_REQUIRED | sed 's/:/\n/g' | while read i; do
+    REQ=`echo $i | awk '{ print $1 }'`
+    CON=`echo $i | awk '{ print $2 }'`
+    VER=`echo $i | awk '{ print $3 }'`
+    echo -e "$REQ\t\t$CON\t\t$VER" >> $WORK/slack-required
+  done
+
+}
+
+function change_other_parameters {
+
+  # Change other parameters started by '[[' in .mkbuild file
+  sed '1,/#>>/ ! d' $MKBUILD_NAME | grep -v '^#' | grep '^\[\[[A-Za-z]' | \
+  while read i; do
+    CHANGE="`echo $i | sed 's/\[\[\(.*\)\]\]=\"\(.*\)\"/\1/'`"
+    VALUE="`echo $i | sed 's/\[\[\(.*\)\]\]=\"\(.*\)\"/\2/'`"
+    edit_file "$CHANGE" "$VALUE" $SLACKBUILD
+  done
+
+}
+
+function get_slackbuild_path {
+
+  # Search for SlackBuild Path in order:
+  #   - command line parameter;
+  #   - mkbuild parameters file;
+  #   - SlackBuild tree;
+  #   - Gentool-portage internet tree;
+  #   - default path (others/unclassified/$PKG_NAME).
+
+  # Start AUX_PATH with command line parameter
+  AUX_PATH="$SLACKBUILD_PATH"
+
+  # Get in mkbuild
+  [ -z "$AUX_PATH" ] && AUX_PATH=`validate_parameter "$SLACKBUILD_PATH" "SLACKBUILD PATH" ""`
+
+  # SlackBuild path in SlackBuild tree
+  [ -z "$AUX_PATH" ] && AUX_PATH=`cd $SLACKBUILDS_DIR && find . -name $SLACKBUILD | sed -e 's/^\.\///' | xargs dirname 2>/dev/null`
+
+  # SlackBuild path default
+  [ -z "$AUX_PATH" ] && AUX_PATH="others/unclassified/$PKG_NAME"
+
+  # Down case SlackBuild path
+  eval "echo $AUX_PATH" | tr [A-Z] [a-z]
+
+}
+
+function apply_mkpatch {
+
+  # Apply mkpatch if exist
+  sed -n '/#p>/,/#p</ { /^#/ b; p }' $MKBUILD_NAME > $DIFF_FILE
+  if [ -s $DIFF_FILE ]; then
+    mkpatch $DIFF_FILE $SLACKBUILD_TEMP > $AUX_TMP || handle_error $?
+    [ ! -s $AUX_TMP ] && handle_error 1
+    cp $AUX_TMP $SLACKBUILD_TEMP
+    [ $VERBOSE -eq $on ] && ( echo -e "\nApply mkpath ..."; cat $DIFF_FILE )
+  fi
+
+}
+
+# ----------------------------------------------------------------
+#                     svn functions
+# ----------------------------------------------------------------
+
+function submit_slackbuild {
+
+  # Submit SlackBuild in local Slack.Sarava tree
+  echo -e "\nSubmiting $SLACKBUILD"
+
+  local candidate oldplace
+
+  # check SlackBuilds directory
+  [ ! -e $SLACKBUILDS_DIR ] && createpkg --sync
+
+  # change to SlackBuilds directory
+  cd $SLACKBUILDS_DIR/
+
+  # Add SlackBuild scripts
+  # check path
+  [ ! -e $SLACKBUILD_PATH ] && svn_mkdir $SLACKBUILD_PATH
+
+  # add SlackBuild
+  svn_copy $WORK/`basename $SLACKBUILD` $SLACKBUILD_PATH
+
+  # check and add slack-required
+  [ -e $WORK/slack-required ] && svn_copy $WORK/slack-required $SLACKBUILD_PATH
+
+  for i in `ls $WORK | grep -E -v '(SlackBuild|old|slack-required|.mkbuild$|.tmp$)\*{0,1}$'`; do
+    svn_copy $WORK/$i $SLACKBUILD_PATH
+  done
+
+  # remove stuff in old places
+  for candidate in $(find . -name $(basename $SLACKBUILD)); do
+    oldplace="`dirname $candidate | sed -e 's/^\.\///'`"
+    if [ "$oldplace" != "$SLACKBUILD_PATH" ]; then
+      echo "Removing SlackBuild found at old path $oldplace"
+      svn_del $oldplace
+    fi
+  done
+
+  if [ "$SIGN_MANIFESTS" -eq $on ]; then
+    repo_gpg_key $SLACKBUILDS_DIR
+  fi
+
+  cd $WORK
+
+}
+
+function submit_mkbuild {
+
+  # Submit mkbuild in local mkbuild Slack.Sarava tree
+  echo -e "\nSubmiting $MKBUILD_NAME"
+
+  local candidate oldplace
+
+  # Check mkbuild directory
+  [ ! -d $MKBUILDS_DIR ] && build_svn_repo $MKBUILDS_DIR $MKBUILDS_SVN
+
+  # Get mkbuild path in parameter file
+  MKBUILD_PATH=$SLACKBUILD_PATH
+
+  # Change to mkbuilds directory
+  cd $MKBUILDS_DIR/
+
+  # Check path
+  [ ! -e $MKBUILD_PATH ] && svn_mkdir $MKBUILD_PATH
+
+  # Add relevant files
+  for i in `ls $WORK | grep -E -v '(SlackBuild|old|slack-required|.tmp$)\*{0,1}$'`; do
+    if [ "`basename $i`" != "$DIST_SRC_NAME" ]; then
+      if ! is_the_same $MKBUILD_PATH $WORK; then
+        svn_copy $WORK/$i $MKBUILD_PATH
+      else
+        svn_add $WORK/$i
+      fi
+    fi
+  done
+
+  # Remove stuff in old places
+  for candidate in $(find . -name $(basename $MKBUILD_NAME)); do
+    oldplace="`dirname $candidate | sed -e 's/^\.\///'`"
+    if [ "$oldplace" != "$MKBUILD_PATH" ]; then
+      echo "Removing mkbuild found at old path $oldplace"
+      svn_del $oldplace
+    fi
+  done
+
+  submit_cleanup
+
+  cd $WORK
+
+}
+
+function submit_cleanup {
+
+  # Remove files that should not be stored at the mkbuilds repository
+  if is_the_same $MKBUILD_PATH $WORK; then
+    (
+      cd $WORK
+      rm -f *.old *.tmp *.SlackBuild slack-required $DIST_SRC_NAME
+    )
+  fi
+
+}
+
+function import_mkbuilds {
+
+  # import mkbuilds into a subversion repository
+  # usage: repository_import [repository]
+
+  local repository="$1"
+
+  if [ -z "$repository" ]; then
+    repository="file:////var/svn/mkbuilds"
+  fi
+
+  repository_import $MKBUILDS_DIR $repository
+
+}
+
+function import_slackbuilds {
+
+  # import SlackBuilds into a subversion repository
+  # usage: repository_import [repository]
+
+  local repository="$1"
+
+  if [ -z "$repository" ]; then
+    repository="file:////var/svn/slackbuilds"
+  fi
+
+  repository_import $SLACKBUILDS_DIR $repository
+
+}
+
+function repository_status {
+
+  local cwd
+
+  if svn_folder $MKBUILDS_DIR; then
+    echo "Status of $MKBUILDS_DIR."
+    cwd="`pwd`"
+    cd $MKBUILDS_DIR && su_svn status
+    cd $cwd
+  fi
+
+  if svn_folder $SLACKBUILDS_DIR; then
+    cwd="`pwd`"
+    echo "Status of $SLACKBUILDS_DIR."
+    cd $SLACKBUILDS_DIR && su_svn status
+    cd $cwd
+  fi
+
+  exit 0
+
+}
+
+# ----------------------------------------------------------------
+#                     general functions
+# ----------------------------------------------------------------
+
+function validate_parameter {
+
+  # Validate parameter in .mkbuild file
+  [ $# -ne 3 ] && handle_error $ERROR_PAR_NUMBER
+
+  if [ ! -z "$1" ]; then
+    echo "$1"
+  else
+    local STRING="`get_variable "$2"`"
+    if [ ! -z "$STRING" ]; then
+      echo "$STRING"
+    else
+      echo "$3"
+    fi
+  fi
+
+}
+
+function decompress_find {
+
+  # Find decompressor program and test flag
+  case $EXTENSION in
+    'gz'|'GZ')
+      DECOMPRESSOR="gunzip"
+      DECOMPRESSOR_TEST_FLAG="-t"
+    ;;
+    'bz2'|'BZ2')
+      DECOMPRESSOR="bunzip2"
+      DECOMPRESSOR_TEST_FLAG="-t"
+    ;;
+    'zip'|'ZIP')
+      DECOMPRESSOR="unzip"
+      DECOMPRESSOR_TEST_FLAG="-t"
+    ;;
+    *)
+    handle_error $ERROR_MKBUILD_CONSTRUCTION "DECOMPRESSOR"
+    ;;
+  esac
+
+}
+
+function load_parameters {
+
+  # Load Createpkg parameters
+  SOURCE_DIR="`eval_parameter SOURCE_DIR /var/simplepkg/sources`"
+  SLACKBUILDS_DIR="`eval_parameter SLACKBUILDS_DIR /var/simplepkg/slackbuilds`"
+  [ ! -d $SLACKBUILDS_DIR ] && mkdir -p $SLACKBUILDS_DIR
+
+  MKBUILDS_DIR="`eval_parameter MKBUILDS_DIR /var/simplepkg/mkbuilds`"
+  [ ! -d $SLACKBUILDS_DIR ] && mkdir -p $SLACKBUILDS_DIR
+
+  SLACKBUILDS_SVN="`eval_parameter SLACKBUILDS_DIR http://slack.fluxo.info/slackbuilds`"
+  MKBUILDS_SVN="`eval_parameter MKBUILDS_SVN http://slack.fluxo.info/mkbuilds`"
+  SVN_USER="`eval_parameter MKBUILDS_SVN_USER`"
+  SVN_GROUP="`eval_parameter MKBUILDS_SVN_GROUP`"
+
+  COLOR_MODE="`eval_parameter COLOR_MODE none`"
+  TMP="`eval_parameter TMP /tmp`"
+  [ ! -e $TMP ] && mkdir -p $TMP
+
+  MKBUILD_COMPRESS="`eval_parameter MKBUILD_COMPRESS tgz`"
+  MKBUILD_AUTHOR="`eval_parameter MKBUILD_AUTHOR`"
+  MKBUILD_AUTHOR_INITIALS="`eval_parameter MKBUILD_AUTHOR_INITIALS`"
+
+  SIGN_MANIFESTS="`eval_boolean_parameter SIGN_MANIFESTS $off`"
+  SIGN_MANIFESTS_USER="`eval_parameter SIGN_MANIFESTS_USER`"
+  SIGN_MANIFESTS_KEYID="`eval_parameter SIGN_MANIFESTS_KEYID`"
+  SIGN_MANIFESTS_WITH_GPG_AGENT="`eval_boolean_parameter SIGN_MANIFESTS_WITH_GPG_AGENT $off`"
+
+  if [ ! -z "$SIGN_MANIFESTS_KEYID" ]; then
+    SIGN_MANIFESTS_KEYID="`echo $SIGN_MANIFESTS_KEYID | tr '[:lower:]' '[:upper:]'`"
+  fi
+
+  if [ "$SIGN_MANIFESTS_WITH_GPG_AGENT" -eq $on ]; then
+    GPG_AGENT_OPTION="--use-agent"
+  else
+    GPG_AGENT_OPTION=""
+  fi
+
+  # For use at common.sh functions
+  SIGN="$SIGN_MANIFESTS"
+  SIGN_KEYID="$SIGN_MANIFESTS_KEYID"
+  SIGN_USER="$SIGN_MANIFESTS_USER"
+
+  if [ "$SIGN_MANIFESTS" -eq $on ]; then
+    get_sign_user
+  fi
+
+}
+
+function file_metainfo {
+
+  # get integrity file metadata
+  # usage: file_metainfo <file> <file_type> <manifest_file>
+
+  local sum="" file="$1" file_type="`echo $2 | tr '[:lower:]' '[:upper:]'`"
+  local size algo candidate folders path manifest_file="$3"
+  local dist_name="`basename $file`"
+
+  if [ -d "$file" ]; then
+    return
+  fi
+
+  if [ -z "$file_type" ]; then
+    file_type="AUX"
+  fi
+
+  if [ ! -e "$file" ]; then
+    if [ "$file_type" == "DIST" ]; then
+
+      # Add DIST information only if source is not under revision control
+      if [ $SVN_MOD -eq $on -o $GIT_MOD -eq $on ]; then
+         return
+      fi
+
+      # Force DIST file name at Manifest
+      dist_name="$DIST_SRC_NAME"
+
+      # Determine file location
+      get_dist_file
+
+      # Update Manifest metadata
+      if [ -e "$DIST_SRC_LOCATION" ]; then
+        file="$DIST_SRC_LOCATION"
+      else
+        echo "$file_type $dist_name " >> $manifest_file # end space is important
+        return 1
+      fi
+
+    elif [ "$file_type" == "PATCH" ]; then
+
+      # Determine file location
+      get_patch_file $file
+
+      # Update Manifest metadata
+      if [ -e "$DOWNLOADED_PATCH_LOCATION" ]; then
+        file="$DOWNLOADED_PATCH_LOCATION"
+      else
+        echo "$file_type $dist_name " >> $manifest_file # end space is important
+        return 1
+      fi
+
+    else
+      echo "$file_type $dist_name " >> $manifest_file # end space is important
+      return 1
+    fi
+  fi
+
+  for algo in md5 rmd160 sha1 sha256 sha512; do
+    sum="$sum `echo $algo | tr '[:lower:]' '[:upper:]'` `gethash $algo $file`"
+  done
+
+  echo $file_type $dist_name `file_size $file` $sum >> $manifest_file
+
+  if [ "$file_type" == "DIST" ] || [ "$file_type" == "PATCH" ]; then
+    echo "Please make sure that the following hashes are correct:"
+    grep -e "^$file_type $dist_name " $manifest_file
+  fi
+
+}
+
+function update_manifest_info {
+
+  # update manifest metainfo for a given file
+  # usage: update_manifest_info <file> <file_type>
+
+  local tmpfile file="$1" file_type="`echo $2 | tr '[:lower:]' '[:upper:]'`"
+
+  if [ -z "$file_type" ]; then
+    file_type="`file_extension $file | tr '[:lower:]' '[:upper:]'`"
+  fi
+
+  # Update Manifest file
+  if [ ! -e "$WORK/Manifest" ]; then
+    touch $WORK/Manifest
+  fi
+
+  # Set temporary file
+  tmpfile="`mktemp $TMP/mkbuild_manifest.XXXXXX`"
+
+  # Update metadata
+  sed -e "/^$file_type `basename $file` /d" $WORK/Manifest > $tmpfile
+  file_metainfo $file $file_type $tmpfile
+
+  if [ "$?" != "0" ]; then
+    echo "Could not add hashes for $file on Manifest: file not found."
+    echo "Please do it with --update-manifest."
+  fi
+
+  # Save Manifest changes
+  strip_gpg_signature $tmpfile | sort > $WORK/Manifest
+
+  rm -f $tmpfile
+
+}
+
+function edit_manifest {
+
+  local option="$1"
+
+  # Check if existing Manifest is properly signed
+  if ! check_manifest_signature; then
+    echo "Invalid signature at $WORK/Manifest, aborting."
+    return 1
+  fi
+
+  # Update Manifest file
+  echo "Updating Manifest..."
+
+  # Update mkbuild metainformation
+  update_manifest_info $WORK/`basename $MKBUILD_NAME`
+
+  # Update SlackBuild information
+  update_manifest_info $WORK/`basename $SLACKBUILD`
+
+  # Update slack-required information
+  if [ -e "$WORK/slack-required" ]; then
+    update_manifest_info $WORK/slack-required
+  fi
+
+  if [ "$option" == "--update" ]; then
+    # Add DIST information only if source is not under revision control
+    if [ $SVN_MOD -eq $on -o $GIT_MOD -eq $on ]; then
+      echo "Source is under version control system, not adding hashes to Manifest."
+    else
+      echo "Updating DIST information at $MKBUILD_NAME Manifest..."
+
+      # Determine file location
+      get_dist_file $SOURCE_FILE
+
+      # Update Manifest metadata
+      if [ -e "$DIST_SRC_LOCATION" ]; then
+        update_manifest_info $DIST_SRC_LOCATION dist
+      else
+        echo "Can't get $DIST_SRC_NAME."
+      fi
+    fi
+  else
+    # Add source code information if its not already there
+    if ! grep -q -e "^DIST $DIST_SRC_NAME " $WORK/Manifest; then
+      update_manifest_info $DIST_SRC_NAME dist
+    fi
+  fi
+
+  # Update patches
+  for i in `find $WORK | grep -E '(.diff$|.diff.gz$|.diff.bz2$|.patch$|.patch.gz$|.patch.bz2$)\*{0,1}$'`; do
+    if [ ! -d "$WORK/$i" ] && ! grep -q -e "^PATCH `basename $i` " $WORK/Manifest; then
+      update_manifest_info $i patch
+    fi
+  done
+
+  # Update patches from URLs
+  for i in $PATCH_URLS; do
+    if ! grep -q -e "^PATCH `basename $i` " $WORK/Manifest; then
+      update_manifest_info $i patch
+    fi
+  done
+
+  # Update miscelaneous information
+  for i in `find $WORK | grep -E -v '(SlackBuild|old|slack-required|.mkbuild$|.tmp$|Manifest$)\*{0,1}$' | \
+                         grep -E -v '(.diff$|.diff.gz$|.diff.bz2$|.patch$|.patch.gz$|.patch.bz2$)\*{0,1}$' | \
+                         grep -v "/\.svn"`; do
+    # Avoid folders, dotfiles and DIST files
+    if [ ! -d "$WORK/$i" ] && \
+       [ "`basename $i`" != "$DIST_SRC_NAME" ] && \
+       ! echo "`basename $i`" | grep -q -e "^\."; then
+      update_manifest_info $i misc
+    fi
+  done
+
+  # Finally, sign the Manifest
+  sign_manifest
+
+}
+
+function get_file {
+
+  # download a file
+  # usage: download_file <file_type> <url> [file] [dist_name]
+
+  local folder folders path candidate
+  local file_type="`echo $1 | tr '[:lower:]' '[:upper:]'`"
+  local url="$2" file="$3" file_name="$4"
+  local protocol="`echo $url| cut -d : -f 1 | tr '[:upper:]' '[:lower:]'`"
+
+  if [ -z "$file_name" ]; then
+    if [ "$file_type" == "DIST" ]; then
+      file_name="$DIST_SRC_NAME"
+    else
+      file_name="`basename $url`"
+    fi
+  fi
+
+  # Clean global var
+  DOWNLOADED_FILE_LOCATION=""
+
+  # Determine file location
+  if [ -d "$file" ]; then
+
+    folder="$file"
+    file="$file_name"
+    for candidate in $(find $folder -name $(basename $file)); do
+      if [ ! -z "$candidate" ]; then
+        break 2
+      fi
+    done
+
+    if [ ! -z "$candidate" ]; then
+      echo "Using $(basename $candidate) found at $(dirname $candidate) to hash at the Manifest."
+      file="$candidate"
+    else
+      echo "Can't find $file at $folder."
+      return 1
+    fi
+
+  elif [ -z "$file" ]; then
+
+    file="$file_name"
+    folders="$WORK $TMP $SOURCE_DIR"
+    if ! is_the_same /tmp $TMP; then
+      folders="$folders /tmp"
+    fi
+
+    echo "Trying to find $(basename $file) at $folders..."
+
+    for path in $folders; do
+      for candidate in $(find $path -name $(basename $file) 2> /dev/null); do
+        if [ ! -z "$candidate" ]; then
+          break 2
+        fi
+      done
+    done
+
+    if [ ! -z "$candidate" ]; then
+
+      echo "Using $(basename $candidate) found at $(dirname $candidate) to hash at the Manifest."
+      file="$candidate"
+
+    elif [ "$protocol" == "https" ] || \
+         [ "$protocol" == "http" ] || \
+         [ "$protocol" == "ftp" ]; then
+
+      # Try to donwload the file
+      echo "File $file not found, trying to download it..."
+      if [ ! -e "$file" ]; then
+        if is_writable_folder $SOURCE_DIR/$PKG_NAME; then
+          file="$SOURCE_DIR/$PKG_NAME/`basename $file_name`"
+          wget "$url" -O "$file"
+          if [ "$?" != "0" ]; then
+            echo "Could not download $file"
+            return 1
+          fi
+        elif is_writable_folder $TMP; then
+          file="$TMP/`basename $file_name`"
+          if [ ! -e "$file" ]; then
+            wget "$url" -O "$file"
+            if [ "$?" != "0" ]; then
+              echo "Could not download $file"
+              return 1
+            fi
+          fi
+        elif ! is_the_same /tmp $TMP; then
+          file="/tmp/`basename $file_name`"
+          if [ ! -e "$file" ]; then
+            wget "$url" -O "$file"
+            if [ "$?" != "0" ]; then
+              echo "Could not download $file"
+              return 1
+            fi
+          fi
+        else
+          echo "Could not download $file"
+          return 1
+        fi
+      fi
+    fi
+  fi
+
+  if [ -e "$file" ]; then
+    DOWNLOADED_FILE_LOCATION="$file"
+  fi
+
+}
+
+function get_dist_file {
+
+  # get package source code
+  # usage: get_dist_file <url> [file_name]
+
+  DIST_SRC_LOCATION=""
+  get_file dist $DIST_SRC_URL
+  DIST_SRC_LOCATION="$DOWNLOADED_FILE_LOCATION"
+
+}
+
+function get_patch_file {
+
+  # get a patch
+  # usage: get_patch <file_name>
+
+  local patch_url file_name="$1"
+
+  if [ -z "$file_name" ]; then
+    return 1
+  fi
+
+  DOWNLOADED_PATCH_LOCATION=""
+
+  for patch_url in $PATCH_URLS; do
+    if [ "`basename $file_name`" == "`basename $patch_url`" ]; then
+      get_file patch $patch_url
+      DOWNLOADED_PATCH_LOCATION="$DOWNLOADED_FILE_LOCATION"
+      break
+    fi
+  done
+
+}
+
+function update_manifest {
+
+  # Get mkbuild values
+  get_mkbuild_values
+
+  # Update the Manifest
+  edit_manifest --update
+
+}
+
+function if_previous_error {
+
+  if [ "$?" != "0" ]; then
+    handle_error $*
+  fi
+
+}
+
+function verbose {
+
+  if [ $VERBOSE -eq $on ]; then
+    echo $*
+  fi
+
+}
+
+function get_mkbuild_values {
+
+  # Get values
+  # Author name
+  AUTHOR=${AUTHOR:="`get_variable "SLACKBUILD AUTHOR"`"}
+  [ -z "$AUTHOR" ] && handle_error $ERROR_MKBUILD_CONSTRUCTION "SLACKBUILD AUTHOR"
+  verbose "[[SLACKBUILD AUTHOR]]=\"$AUTHOR\""
+
+  # Author initials
+  STR_MOUNT=`echo $AUTHOR | sed 's/ /\n/g' | sed 's/^\([A-Z]\).*/\1/' | sed ':i; $!N;  s/\n//; ti' | tr [A-Z] [a-z]`
+  AUTHOR_INITIALS="`validate_parameter "$AUTHOR_INITIALS" "SLACKBUILD AUTHOR INITIALS" "$STR_MOUNT"`"
+  if_previous_error $ERROR_MKBUILD_CONSTRUCTION "SLACKBUILD AUTHOR INITIALS"
+  verbose "[[SLACKBUILD AUTHOR INITIALS]]=\"$AUTHOR_INITIALS\""
+
+  # URL program
+  URL=`validate_parameter "$URL" "DOWNLOAD FOLDER URL" ""`
+  if_previous_error handle_error $ERROR_MKBUILD_CONSTRUCTION "URL"
+  verbose "[[URL]]=\"$URL\""
+
+  AUX=`get_mkbuild_status "svn_source"`
+  SVN_MOD=`convert_boolean "$AUX"`
+
+  AUX=`get_mkbuild_status "git_source"`
+  GIT_MOD=`convert_boolean "$AUX"`
+
+  # Check sections
+  if [ $SVN_MOD -eq $on -o $GIT_MOD -eq $on -o $URL == "" ]; then
+    LIST_OFF="download_source md5sum_download_and_check_0 md5sum_download_and_check_1 gpg_signature_check untar_source"
+    verbose -e "\nCheck subversion or empty URL"
+    for i in $LIST_OFF; do
+      if [ `get_mkbuild_status "$i"` != "off" ]; then
+        handle_error $ERROR_MKBUILD_VCS
+      else
+        verbose -e "off: $i is ok."
+      fi
+    done
+  fi
+
+  STR_MOUNT="`echo $URL | sed 's/.*\.\([a-z0-9]\+\)$/\1/'`"
+  if [ $STR_MOUNT = "gz" -o $STR_MOUNT = "tgz" -o $STR_MOUNT = "bz2" -o $STR_MOUNT = "zip" ]; then
+    SOURCE_NAME=`basename $URL`
+    URL_BASE=`dirname $URL`
+  else
+    URL_BASE=$URL
+  fi
+  verbose "[[DOWNLOAD FOLDER URL]]=\"$URL_BASE\""
+
+  if [ $SVN_MOD -eq $off ] && [ $GIT_MOD -eq $off ]; then
+    # Extension
+    EXTENSION=`validate_parameter "$EXTENSION" "EXTENSION" "$STR_MOUNT"`
+    if_previous_error handle_error $ERROR_MKBUILD_CONSTRUCTION "EXTENSION"
+    verbose "[[EXTENSION]]=\"$EXTENSION\""
+
+    # Unpacker
+    UNPACKER=`validate_parameter "$UNPACKER" "UNPACKER" "tar"`
+    if_previous_error handle_error $ERROR_MKBUILD_CONSTRUCTION "UNPACKER"
+    verbose "[[UNPACKER]]=\"$UNPACKER\""
+
+    # Unpacker flags
+    [ "$UNPACKER" == "tar" ] && STR_MOUNT="--no-same-owner --no-same-permissions -xvf" || STR_MOUNT=""
+    UNPACKER_FLAGS=`validate_parameter "$UNPACKER_FLAGS" "UNPACKER FLAGS" "$STR_MOUNT"`
+    if_previous_error handle_error $ERROR_MKBUILD_CONSTRUCTION "UNPACKER FLAGS"
+    verbose "[[UNPACKER_FLAGS]]=\"$UNPACKER_FLAGS\""
+
+    # Decompressor program and test flag
+    DECOMPRESSOR=`validate_parameter "$DECOMPRESSOR" "DECOMPRESSOR" ""`
+    [ -z $DECOMPRESSOR ] && decompress_find
+    verbose "[[DECOMPRESSOR]]=\"$DECOMPRESSOR\""
+
+    DECOMPRESSOR_TEST_FLAG=`validate_parameter "$DECOMPRESSOR_TEST_FLAG" "DECOMPRESSOR TEST FLAG" ""`
+    if_previous_error handle_error $ERROR_MKBUILD_CONSTRUCTION "DECOMPRESSOR TEST FLAG"
+    verbose "[[DECOMPRESSOR TEST FLAG]]=\"$DECOMPRESSOR_TEST_FLAG\""
+  fi
+
+  # Build number
+  BUILD_NUMBER=`validate_parameter "$BUILD_NUMBER" "BUILD NUMBER" "1"`
+  if_previous_error handle_error $ERROR_MKBUILD_CONSTRUCTION "BUILD NUMBER"
+
+  # Build archteture
+  ARCH=`validate_parameter "$ARCH" "ARCH" "i486"`
+  verbose "[[ARCH]]=\"$ARCH\""
+
+  # Source name
+  STR_MOUNT=`echo $SOURCE_NAME | sed -r 's/(.*)-(.*)\.(.*\..*)$/\1/'`
+  SRC_NAME=`validate_parameter "$SRC_NAME" "SOURCE NAME" "$STR_MOUNT"`
+  if_previous_error handle_error $ERROR_MKBUILD_CONSTRUCTION "SOURCE NAME"
+  verbose "[[SOURCE NAME]]=\"$SRC_NAME\""
+
+  # SOURCE NAME cannot be empty
+  if [ -z "$SRC_NAME" ]; then
+    echo "SOURCE NAME is empty."
+    handle_error $ERROR_MKBUILD_CONSTRUCTION "SOURCE NAME"
+  fi
+
+  # Package name
+  STR_MOUNT=$SRC_NAME
+  PKG_NAME=`validate_parameter "$PKG_NAME" "PACKAGE NAME" "$STR_MOUNT"`
+  verbose "[[PACKAGE NAME]]=\"$PKG_NAME\""
+
+  # PACKAGE NAME cannot be empty
+  if [ -z "$PKG_NAME" ]; then
+    echo "PACKAGE NAME is empty."
+    handle_error $ERROR_MKBUILD_CONSTRUCTION "PACKAGE NAME"
+  fi
+
+  # Version
+  STR_MOUNT=`echo $SOURCE_NAME | sed -r 's/(.*)-(.*)\.(.*\..*)$/\2/'`
+  VERSION=`validate_parameter "$VERSION" "VERSION" "$STR_MOUNT"`
+  if_previous_error handle_error $ERROR_MKBUILD_CONSTRUCTION "VERSION"
+  verbose "[[VERSION]]=\"$VERSION\""
+
+  # Source name construction string
+  CONST_STRING="`validate_parameter "$CONST_STRING" "SOURCE NAME CONSTRUCTION STRING" "\\\$SRC_NAME-\\\$VERSION.tar.$EXTENSION"`"
+  verbose "[[SOURCE NAME CONSTRUCTION STRING]]=\"$CONST_STRING\""
+
+  # Build Source Name
+  [ -z $SOURCE_NAME ] && SOURCE_NAME=`eval "echo $CONST_STRING"`
+  verbose "SOURCE_NAME=\"$SOURCE_NAME\""
+
+  # Eval source code name and URL
+  DIST_SRC_NAME="`eval "echo $CONST_STRING"`" # we need this to strip some escape strings
+  DIST_SRC_NAME="`eval "echo $DIST_SRC_NAME"`" # twice does the job
+  DIST_SRC_URL="`eval "echo $URL_BASE"`" # we need this to strip some escape strings
+  DIST_SRC_URL="`eval "echo $DIST_SRC_URL"`" # twice does the job
+  DIST_SRC_URL="$DIST_SRC_URL/$DIST_SRC_NAME"
+
+  # Documentations list
+  DEFAULT_DOCFILES="NEWS TODO README AUTHORS INSTALL ChangeLog MAINTAINERS COPYING LICENSE SIGNATURE readme.*"
+  DOCFILES=`validate_parameter "$DOCFILES" "DOCUMENTATION FILES" "$DEFAULT_DOCFILES"`
+  verbose "[[DOCUMENTATION FILES]]=\"$DOCFILES\""
+
+  # ./configure option
+  OPTIONS=`validate_parameter "$OPTIONS" "OTHER CONFIGURE ARGS" ""`
+  verbose "[[OTHER CONFIGURE ARGS]]=\"$OPTIONS\""
+
+  # PREFIX
+  PREFIX=`validate_parameter "$PREFIX" "PREFIX" "/usr"`
+  verbose "[[PREFIX]]=\"$PREFIX\""
+
+  # Number of jobs
+  NUMJOBS=`validate_parameter "$NUMJOBS" "NUMBER OF JOBS" ""`
+  is_number $NUMJOBS && NUMJOBS="-j${NUMJOBS}"
+  verbose "[[NUMBER OF JOBS]]=\"$NUMJOBS\""
+
+  # Make slack-required file
+  SLACK_REQUIRED=`validate_parameter "$SLACK_REQUIRED" "SLACK REQUIRED" ""`
+  verbose "[[SLACK REQUIRED]]=\"$SLACK_REQUIRED\""
+
+  # SlackBuild model
+  MODEL=`validate_parameter "$MODEL" "SLACKBUILD MODEL" "generic.mkSlackBuild"`
+  verbose "[[SLACKBUILD MODEL]]=\"$MODEL\""
+
+  # PATCH FILES
+  PATCH_FILES=`validate_parameter "$PATCH_FILES" "PATCH FILES" ""`
+  verbose "[[PATCH_FILES]]=\"$PATCH_FILES\""
+
+  # PATCH URLs
+  PATCH_URLS=`validate_parameter "$PATCH_URLS" "PATCH URLS" ""`
+  verbose "[[PATCH_URLS]]=\"$PATCH_URLS\""
+
+  # Strip  the smallest prefix containing num leading slashes from each file name found in the patch file.
+  NPS_STRIP=`validate_parameter "$NPS_STRIP" "NUMBER OF PREFIX SLASHES TO STRIP" "1"`
+  verbose "[[NUMBER OF PREFIX SLASHES TO STRIP]]=\"$NPS_STRIP\""
+
+  # SlackBuild path
+  # SlackBuild path in mkbuild parameters file
+  SLACKBUILD=$WORK/${PKG_NAME}.SlackBuild
+  SLACKBUILD_PATH=`get_slackbuild_path`
+  verbose "[[SLACKBUILD PATH]]=\"$SLACKBUILD_PATH\""
+
+}
+
+function make_slackbuild {
+
+  #--------------------------------------------------------------
+  #-                   Start build SlackBuild                   -
+  #--------------------------------------------------------------
+
+  # Get mkbuild values
+  get_mkbuild_values
+
+  verbose -e "\nStart SlackBuild make"
+  SLACKBUILD_TEMP=$SLACKBUILD.tmp
+  cp $MODEL_DIR/$MODEL $SLACKBUILD_TEMP
+
+  # Apply mkpatch
+  verbose -e "\nMkpatch section ..."
+  apply_mkpatch
+
+  # On/Off sections
+  verbose -e "\nEnable/disable sections ..."
+  activate_sections
+
+  # Change sections
+  verbose -e "\nEdit sections ..."
+  section_edit
+
+  # Change strings from model
+  verbose -e "\nChange strings in $PACKAGE.SlackBuild model..."
+  start_build $SLACKBUILD_TEMP
+
+  # Remove off sections
+  verbose -e "\nRemove off sections ..."
+  build_slackbuild
+
+  # Make slack-required file
+  verbose -e "\nMake slack-required file ..."
+  make_slack_required
+
+  if [ -e slack-required ]; then
+    DEPENDENCY_LIST="`cat $WORK/slack-required | awk '{print $1}' | grep '^[a-z]' | tr '\012' ' '`"
+    edit_file "REQUIRES" "$DEPENDENCY_LIST" $SLACKBUILD
+  else
+    edit_file "REQUIRES" " " $SLACKBUILD
+  fi
+
+  # Others changes
+  verbose -e "\nEdit other [[]] parameters ..."
+  change_other_parameters
+
+  if [ "$SIGN_MANIFESTS" -eq $on ]; then
+    mkbuild_update_keyring
+    repo_gpg_key $MKBUILDS_DIR
+  fi
+
+  # Update Manifest file
+  edit_manifest
+
+  if [ "$?" == "0" ]; then
+
+    # Commit SlackBuild
+    [ $SUBMIT_SLACKBUILD -eq $on ] && submit_slackbuild
+
+    # Commit mkbuild
+    [ $SUBMIT_MKBUILD -eq $on ] && submit_mkbuild
+  fi
+
+}
+
+function create_mkbuild {
+
+  # Create a new .mkbuild parameters-file
+  cp $MODEL_DIR/model.mkbuild $MKBUILD_NAME
+
+  if [ -z "$AUTHOR" ] && [ ! -z "$MKBUILD_AUTHOR" ]; then
+    AUTHOR="$MKBUILD_AUTHOR"
+  fi
+
+  if [ -z "$AUTHOR_INITIALS" ] && [ ! -z "$MKBUILD_AUTHOR_INITIALS" ]; then
+    AUTHOR_INITIALS="$MKBUILD_AUTHOR_INITIALS"
+  fi
+
+  # Package Author
+  if [ ! -z "$AUTHOR" ]; then
+    edit_file "YOUR NAME" "${AUTHOR}" $MKBUILD_NAME
+    # Package Author Signature
+    if [ -z "$AUTHOR_INITIALS" ]; then
+      AUTHOR_INITIALS=`echo $AUTHOR | tr '[A-Z]' '[a-z]' | sed 's/ /\n/g' |  sed 's/^\([a-z]\).*/\1/' | sed ':i ; $! N ; s/\n// ; t i'`
+    fi
+    edit_file "YOUR SIGNATURE" "${AUTHOR_INITIALS}" $MKBUILD_NAME
+  fi
+
+  # Change Default SourceForge URL
+  [ -z "$URL" ] && URL="http://downloads.sourceforge.net/[[PKG NAME]]/"
+  edit_file "DEFAULT URL" "${URL}" $MKBUILD_NAME
+
+  # Change Package Name
+  edit_file "PKG NAME" "${MKBUILD_NAME//.mkbuild}" $MKBUILD_NAME
+
+  # Change SlackBuild Path
+  if [ ! -z "$MKBUILD_PATH" ]; then
+    edit_file_full "\[\[SLACKBUILD PATH\]\]=.*" "\[\[SLACKBUILD PATH\]\]=\"`regexp_slash $MKBUILD_PATH`\"" $MKBUILD_NAME
+  fi
+
+  # Print .mkbuild name
+  echo "$MKBUILD_NAME"
+
+}
+
+function search_mkbuild {
+
+  # find a given mkbuild
+  # usage: search_mkbuild [-i]
+
+  if [ "$MKBUILD_NAME" == ".mkbuild" ]; then
+    list_mkbuilds
+    return
+  fi
+
+  if [ ! -z "$MKBUILD_PATH" ]; then
+    if echo $name | grep -q -e "\.mkbuild$"; then
+      if [ -d "$MKBUILDS_DIR/$MKBUILD_PATH" ]; then
+        find $MKBUILDS_DIR/$MKBUILD_PATH -name $MKBUILD_NAME
+      else
+        find $MKBUILDS_DIR -name $MKBUILD_NAME
+      fi
+    else
+      if [ -d "$MKBUILDS_DIR/$MKBUILD_PATH" ]; then
+        find $MKBUILDS_DIR/$MKBUILD_PATH -name '*.mkbuild'
+      fi
+    fi
+  else
+    if [ "$1" == "-i" ]; then
+      # case insensitive mode
+      find $MKBUILDS_DIR -iname $MKBUILD_NAME
+    else
+      find $MKBUILDS_DIR -name $MKBUILD_NAME
+    fi
+  fi
+
+}
+
+function set_mkbuild_name {
+
+  local name="$1"
+
+  MKBUILD_PATH=""
+
+  if [ ! -z "$name" ]; then
+    MKBUILD_NAME="`basename $name`"
+  fi
+
+  if echo $name | grep -q "/"; then
+    if echo $name | grep -q -e "\.mkbuild$"; then
+      MKBUILD_NAME="`basename $name`"
+      MKBUILD_PATH="`dirname $name`"
+    else
+      MKBUILD_PATH="$name"
+    fi
+  else
+    MKBUILD_NAME="${name//.mkbuild}.mkbuild"
+  fi
+
+}
+
+function list_mkbuilds {
+
+  # list all available mkbuilds
+  # usage: list_mkbuilds
+
+  list_builds $MKBUILDS_DIR mkbuild
+
+}
+
+function edit_mkbuild {
+
+  # edit a mkbuild
+  # usage: edit_mkbuild
+
+  if [ -e "$MKBUILD_NAME" ]; then
+    if [ -z "$EDITOR" ]; then
+      EDITOR="vi"
+    fi
+    $EDITOR $MKBUILD_NAME
+  else
+    echo "Not found: $MKBUILD_NAME"
+    return 1
+  fi
+
+}
+
+function mkbuild_update_keyring  {
+
+  # Update keyring using GPG-KEY from
+  # mkbuild repository
+
+  update_keyring $MKBUILDS_DIR/GPG-KEY
+
+}
+
+function sign_manifest {
+
+  # sign manifest file
+  # usage: sign_manifest
+
+  if [ "$SIGN_MANIFESTS" -eq $on ]; then
+    echo "Signing Manifest..."
+    if [ ! -z "$SIGN_USER" ] && [ "`whoami`" != "$SIGN_USER" ]; then
+      su $SIGN_USER -c "gpg $GPG_AGENT_OPTION --clearsign -u $SIGN_KEYID $WORK/Manifest"
+      mv $WORK/Manifest.asc $WORK/Manifest
+    else
+      gpg $GPG_AGENT_OPTION --clearsign -u $SIGN_KEYID $WORK/Manifest
+      mv $WORK/Manifest.asc $WORK/Manifest
+    fi
+  fi
+
+}
+
+function check_manifest_signature {
+
+  # check if a manifest signature is valid
+  # usage: check_manifest_signature
+
+  if [ -e "$WORK/Manifest" ]; then
+    if grep -q -- "-----BEGIN PGP SIGNED MESSAGE-----" $WORK/Manifest; then
+      echo "Checking existing Manifest signature..."
+      mkbuild_update_keyring
+      if [ ! -z "$SIGN_USER" ] && [ "`whoami`" != "$SIGN_USER" ]; then
+        su $SIGN_USER -c "gpg --verify $WORK/Manifest"
+        if [ "$?" != "0" ]; then
+          return 1
+        fi
+      else
+        gpg --verify $WORK/Manifest
+        if [ "$?" != "0" ]; then
+          return 1
+        fi
+      fi
+    fi
+  fi
+
+}
+
+function delete_mkbuild {
+
+  # delete content from a mkbuild folder
+  # usage: delete_mkbuilds [file]
+
+  local folder candidate file="$1"
+  local name="`basename $MKBUILD_NAME .mkbuild`.mkbuild"
+
+  for candidate in `find $MKBUILDS_DIR -name $name`; do
+    folder="`dirname $candidate`"
+    if [ -d "$folder" ]; then
+      if [ -z "$1" ]; then
+        # Delete the whole mkbuild folder
+        svn_del $folder
+      elif [ -e "$folder/$file" ]; then
+        svn_del $folder/$file
+      fi
+    fi
+  done
+
+}
+
+function delete_slackbuild {
+
+  # delete content from a SlackBuild folder
+  # usage: delete_slackbuilds [file]
+
+  local folder candidate file="$1"
+  local name="`basename $MKBUILD_NAME .mkbuild`.SlackBuild"
+
+  for candidate in `find $SLACKBUILDS_DIR -name $name`; do
+    folder="`dirname $candidate`"
+    if [ -d "$folder" ]; then
+      if [ -z "$1" ]; then
+        # Delete the whole mkbuild folder
+        svn_del $folder
+      elif [ -e "$folder/$file" ]; then
+        svn_del $folder/$file
+      fi
+    fi
+  done
+
+}
+
+function list_mkbuild_contents {
+
+   if [ -e "$MKBUILD_NAME" ]; then
+     ls `dirname $MKBUILD_NAME`
+   else
+     echo "Not found: $MKBUILD_NAME"
+     return 1
+   fi
+
+}
+
+function working_copy {
+
+  local copy tmpfolder name
+
+  if [ -e "$MKBUILD_NAME" ]; then
+    name="$(basename $MKBUILD_NAME .mkbuild)"
+    copy="$(basename $(basename $MKBUILD_NAME .mkbuild))"
+    if [ -d "$copy" ]; then
+      tmpfolder="`mktemp $name.XXXXXX`"
+      mv $copy $tmpfolder/
+    fi
+    rsync -av --exclude=".svn" --exclude=".git" `dirname $MKBUILD_NAME`/ $copy/ &> /dev/null
+    echo "Working copy for $name set at $(pwd)/$name."
+   else
+     echo "Not found: $MKBUILD_NAME"
+     return 1
+  fi
+
+}
+
+function get_param {
+
+  # get a parameter from a mkbuild file
+  # usage: get_param <parameter>
+
+  local parameter="`echo $* | tr '[:lower:]' '[:upper:] | tr -d '"' | tr -d "'"'`"
+
+  if [ -e "$MKBUILD_NAME" ]; then
+    grep -e "\[\[$parameter\]\]" $MKBUILD_NAME | cut -d = -f 2 | tr -d '"' | tr -d "'"
+  fi
+
+}
+
+# ----------------------------------------------------------------
+
+#=============================
+#        Main Program
+#=============================
+
+# Common functions
+COMMON_SH="/usr/libexec/simplepkg/common.sh"
+PROG_VERSION="`echo '$Rev$' | sed -e 's/[^0-9]//g'`"
+BASENAME="`basename $0`"
+WORK=`pwd`
+LANG=en_US
+EXIT_CODE=0
+
+if [ -f "$COMMON_SH" ]; then
+  source $COMMON_SH
+else
+  echo $error "$BASENAME: file $COMMON_SH not found. Check your $BASENAME installation"
+fi
+
+# Start constants
+set_constants
+
+# Set submit off
+SUBMIT_SLACKBUILD=$off
+SUBMIT_MKBUILD=$off
+# Set verbose off
+VERBOSE=$off
+SVN_MOD=$off
+
+# Load /etc/simplepkg/simplepkg.conf parameters
+load_parameters
+
+# Select color mode: gray, color or none (*)
+color_select $COLOR_MODE
+
+# Auxiliar file
+AUX_TMP=/tmp/mkbuild_tmp.$RANDOM
+DIFF_FILE=/tmp/mkbuild.diff.$RANDOM
+# Derectory to SlackBuild models
+MODEL_DIR=${MODEL_DIR:="/etc/simplepkg/defaults/mkbuild"}
+# SlackDesk line length
+SLACKDESC_LEN=78
+
+# Load error codes
+error_codes
+
+# Show help if has no arguments
+[ $# -eq 0 ] && mkbuild_use && exit 1
+
+# Configure input parameters
+set_parameters "$@"
+
+verbose -e "$BASENAME version $PROG_VERSION\n"
+case $ACTION in
+  'update_manifest')
+    shift
+    update_manifest $*
+  ;;
+  'commit_slackbuild')
+    shift 2
+    commit_changes $SLACKBUILDS_DIR $MKBUILD_BASENAME: $*
+  ;;
+  'commit_mkbuild')
+    shift 2
+    commit_changes $MKBUILDS_DIR $MKBUILD_BASENAME: $*
+  ;;
+  'commit_all')
+    shift 2
+    commit_changes $SLACKBUILDS_DIR $MKBUILD_BASENAME: $*
+    commit_changes $MKBUILDS_DIR $MKBUILD_BASENAME: $*
+  ;;
+  'import_slackbuilds')
+    shift
+    import_slackbuilds $*
+  ;;
+  'import_mkbuilds')
+    shift
+    import_mkbuilds $*
+  ;;
+  'import_all')
+    shift
+    import_mkbuilds $*
+    import_slackbuilds $*
+  ;;
+  'delete_slackbuild')
+    delete_slackbuild
+  ;;
+  'delete_mkbuild')
+    delete_mkbuild
+  ;;
+  'delete_all')
+    delete_mkbuild
+    delete_slackbuild
+  ;;
+  'new')
+    create_mkbuild
+  ;;
+  'build')
+    make_slackbuild
+  ;;
+  'search')
+    search_mkbuild -i
+  ;;
+  'status')
+    repository_status
+  ;;
+  'list')
+    list_mkbuild_contents
+  ;;
+  'edit')
+    edit_mkbuild
+  ;;
+  'working_copy')
+    working_copy
+  ;;
+  'get_param')
+    shift 2
+    get_param $*
+  ;;
+esac
+
+# Clear temporary files
+verbose -e "\nRemove temporary files ..."
+clear_files
+exit $EXIT_CODE

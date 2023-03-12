@@ -1,0 +1,312 @@
+\documentclass{article}
+\usepackage[brazilian]{babel}
+\usepackage[latin1]{inputenc}
+\usepackage[dvips]{graphics}
+\usepackage{hyperref}
+\usepackage{html,makeid}
+
+\title{Simplaret: simplepkg retrieval tool}
+\author{Silvio Rhatto}
+
+\begin{document}\label{start}
+\maketitle
+
+\begin{abstract}
+Simplaret is a \htmladdnormallink{simplepkg}{http://slack.fluxo.info/simplepkg-en} tool used to download packages from local and remote repositories.  With simplaret, one can grab packages for all archictectures and versions of slackware-like distributions that follows the mirror guidelines, allowing an easy management all jails and slackware installations in a machine, no matter wich arquiteture or version each one has.
+
+It was inspired in swaret behavior but don't tries to get its complexity level, but execute package download in a different way, where the local repository is organized by archictecture and version. It can also search for packages. It runs on top of pkgtool and is totally non-instrusive and can search, add, remove and upgrade packages. Portuguese version \htmladdnormallink{here}{/simplaret}.
+\end{abstract}
+
+\section{Downloading and installing}
+
+Simplaret comes with simplepkg, wich installation and configuration is detailed at http://slack.fluxo.info/simplepkg. Simplaret uses /etc/simplepkg/simplepkg.conf for its definitions and /etc/simplepkg/repos.conf for repository information.
+
+The default configuration is placed, respectively, at /etc/simplepkg/defaults/simplepkg.conf and /etc/simplepkg/defaults/repos.conf and should work for most people, but if you want to change something please don't edit the default configuration files as the default setting may change in future releases. If you have a /etc/simplepkg/repos.conf file, then simplaret will just ignore the default repos.conf.
+
+\section{Using simplaret}
+
+Simplaret stores its data in system wide folders. Then, some funcionality will just be available if its run with root user capabilities. The first thing you need to do with simplaret is to fetch repository metadata, using
+
+\begin{verbatim}
+simplaret --update
+\end{verbatim}
+
+or simply 
+
+\begin{verbatim}
+simplaret update
+\end{verbatim}
+
+as simplepkg supports both command line behaviour (--update or just update). After that, you can search for packages using commands like
+
+\begin{verbatim}
+simplaret search ekiga
+\end{verbatim}
+
+The result should be something like
+  
+\begin{verbatim}
+REPOS repository fluxo, arch: i386, version: 11.0: ekiga-2.0.5-i586-1rd.tgz
+\end{verbatim}
+
+As we'll see afterwards, "REPOS" means the repository type, "fluxo" is the repository name, "arch" is the package architecture (i386 in this case) and "version" is the repository version (11.0 in this case).
+
+To install this package, just type
+
+\begin{verbatim}
+simplaret install ekiga
+\end{verbatim}
+
+By default, if simplaret finds in the repository a slack-required file for this package (i.e, the file ekiga.slack-required in the same folder of the binary package) then it will try to install all unmet dependencies. This default behaviour can be disabled through config file parameters.
+
+If you just want to download the package, type
+
+\begin{verbatim}
+simplaret get ekiga
+\end{verbatim}
+
+In the case of simplaret finds more than one package with the same name, it will get in the order that the "search" option shows them. The search precedence can also be defined by config file parameters. For instance, the command
+
+\begin{verbatim}
+simplaret search kernel-generic
+\end{verbatim}
+
+can return something like
+
+\begin{verbatim}
+ROOT repository fluxo, arch: i386, version: 11.0: kernel-generic-2.6.17.13-i486-1.tgz
+ROOT repository fluxo, arch: i386, version: 11.0: kernel-generic-2.6.18-i486-1.tgz
+\end{verbatim}
+
+So the command
+
+\begin{verbatim}
+simplaret install kernel-generic
+\end{verbatim}
+
+will attempt to install the package "kernel-generic-2.6.17.13-i486-1.tgz" and not the file "kernel-generic-2.6.18-i486-1.tgz". If you want to force simplaret to get and specific package, use its complete file name:
+
+\begin{verbatim}
+simplaret install kernel-generic-2.6.18-i486-1.tgz
+\end{verbatim}
+
+If a package is already installed in the system, the --install option will try to upgrade it if the version or build number between the installed package and the one in the repository are different. So the command
+
+\begin{verbatim}
+simplaret install simplepkg
+\end{verbatim}
+
+updates simplepkg in the case there's a new version. To remove a package, type
+
+\begin{verbatim}
+simplaret remove nome-do-pacote
+\end{verbatim}
+
+That's just an alias for the standard removepkg command.
+
+Simplaret stores downloaded packages in a system folder that defaults to /var/simplaret.  As you get more and more packages, simplaret will consume more space ir your disk. To erase your local repository folder, use the command
+
+\begin{verbatim}
+simplaret purge
+\end{verbatim}
+
+This will erase just the packages from the current arch and version. Details about how to erase the repository for different arch and version are in another session.
+
+You can also force simplaret to erase just old packages. The following command erases just packages older than six weeks or more:
+
+\begin{verbatim}
+simplaret purge -w 3
+\end{verbatim}
+
+\section{Downloading patches and upgrading the system}
+
+Simplaret hasn't just about package installing and removal, it has two more important features: patches retrieval and application. Assuming that the patches repository of your slackware flavour is correctly configured (what should work with almost everyone with the default configuration), you can fetch the available patches using the command
+
+\begin{verbatim}
+simplaret get-patches
+\end{verbatim}
+
+If you don't just donwload but also apply those patches, use
+  
+\begin{verbatim}
+simplaret upgrade
+\end{verbatim}
+
+\section{Working with more than one architecture and version}
+
+Until now we just looked what is the requirement for all package management system: package retrieval, installation, search, upgrade and dependency resolution. What makes simplaret different from another tools is the ability to deal with different architectures and versions and slackware installations.
+
+The features descibed in this section will just make sense after you read the next section, when we'll talk about multiple slackware installations and jails in the same computer.
+
+Suppose you're running Slackware (arch i386) bit wants to update the package list from Slamd64 version 11.0 (arch x86\_64). To do that, just type
+
+\begin{verbatim}
+ARCH=x86_64 VERSION=11.0 simplaret update
+\end{verbatim}
+
+This command grabs the Slamd64 package list without confliting in any way with the standard and already downloaded i386 Slackware package list. This doesn't happens because simplaret stores metadata from different archs and versions at different folders.
+
+Its optional to pass ARCH and VERSION environment variables to simplaret. If one or none of them was specified, simplaret uses the standar system value, obtained from the file /etc/slackware-version, or uses config parameters to do that.
+
+As an example, to search for a package in the arch powerpc (Slackintosh) version 11.0, just type
+
+\begin{verbatim}
+ARCH=powerpc VERSION=11.0 simplaret search package-name
+\end{verbatim}
+
+All command previously mentioned can work that way, except those that install or remove packages as its dangerous to mix packages from different archs and versions in the same system.
+
+\section{Working with multiple installations}
+
+The previously section mentions a feature that just makes sense in systems where there's more than one slackware-like installation using different archs and versions.
+
+Say you have a x86\_64 machine with three installed systems:
+
+\begin{enumerate}
+  \item Slamd64 11.0 at the root folder
+  \item Slackware 11.0 at /mnt/slackware-1
+  \item Slackware 10.2 at /mnt/slackware-2
+\end{enumerate}
+
+In the case of package install or patch retrieval and application, simplaret supports the environment variable ROOT to specify which folder simplaret should look for a system.
+
+Then, to install a package at /mnt/slackware-1, just type
+
+\begin{verbatim}
+ARCH=i386 VERSION=11.0 simplaret update
+ROOT=/mnt/slackware-1 simplaret install package-name
+\end{verbatim}
+
+The first command just updates the package list and the second makes simplepkg install the package with using /mnt/slackware-1 arch and version. If you want to do the same at /mnt/slackware-2, use the analogous command
+
+\begin{verbatim}
+ARCH=i386 VERSION=10.2 simplaret update
+ROOT=/mnt/slackware-2 simplaret install package-name
+\end{verbatim}
+
+There's also a feature to make patch retrieval and application with just one command, using the file /etc/simplepkg/jailist. This file is used by simplepkg's mkjail script to store with jails you have on your system but is also used by simplaret to upgrade all jails with just one command.
+
+Considering that your box has the three previously mentioned slackware installation. Then, to add /mnt/slackware-1 and /mnt/slackware-2 in the automatic upgrade list, add the following lines in your /etc/simplepkg/jailist (without spaces):
+
+\begin{verbatim}
+/mnt/slackware-1
+/mnt/slackware-2
+\end{verbatim}
+
+The root system doesn't need to be added in this file. Then, you can get the patches for all your three systems with the command
+
+\begin{verbatim}
+simplaret get-patches
+\end{verbatim}
+
+To get the patches and/or apply them in all jails (including the root system), use
+
+\begin{verbatim}
+simplaret upgrade
+\end{verbatim}
+
+This feature makes easier to keep all your installations always upgraded.
+
+\section{The repos.conf file}
+
+Now that we just talked about all simplaret features, its time to take a tour at its configuration files. The first one we'll say about is the repository definition file, /etc/simplepkg/repos.conf.
+
+If you don't mind to make an advanced simplaret usage, then probably you can just leave this section as the default config should work for almost all standard situations and you'll just need to edit repos.conf to change repository priorities.
+
+The repos.conf file contains one repository definition per line using the following syntax:
+
+\begin{verbatim}
+TYPE[-ARCH][-VERSION]="name%URL"
+\end{verbatim}
+
+The content in brackets are optional depending on the repository type as we'll see later in this section. The repository types supported by simplaret are:
+
+\subsection{PATCHES}
+
+PATCHES: used for repositories containing patches and which file metadata is the file FILE\_LIST instead the standard FILELIST.TXT; example:
+
+\begin{verbatim}
+PATCHES-i386-11.0="fluxo%http://slack.fluxo.info/packages/slackware/slackware-11.0/patches/"
+\end{verbatim}
+
+This defines a patches repository for arch i386 (official Slackware), version 11.0 and named as "fluxo".
+
+Its optional to have a PATCHES definition in order to get patches: the ROOT repository definition just take care of that and you'll just need to use a PATCHES definition if you want to give precedence to some patches repository over all other definition types.
+
+\subsection{ROOT}
+
+ROOT: this type specifies the default slackware-like repository, where the content is sorted by version. An official slackware repository then is defined as
+
+\begin{verbatim}
+ROOT-i386="tds%http://slackware.mirrors.tds.net/pub/slackware/"
+\end{verbatim}
+
+ROOT repositories needs just the arch definition, a name and an URL. In the previous case, we have a ROOT repository called "tds". It doesn't need any version information as its already considers tha the content is sorted in folders like http://slackware.mirrors.tds.net/pub/slackware/slackware-10.2/ and http://slackware.mirrors.tds.net/pub/slackware/slackware-11.0/.
+
+\subsection{REPOS}
+
+REPOS: this repository type ir arch and version oriented, like
+
+\begin{verbatim}
+REPOS-i386-11.0="fluxo%http://slack.fluxo.info/packages/slackware/slackware-11.0/"
+\end{verbatim}
+
+In the above case, a repository called "fluxo" is defined using arch i386 and version 11.0 with URL http://slack.fluxo.info/packages/slackware/slackware-11.0/. This repository type is recommended when using non-official repositories.
+
+\subsection{NOARCH}
+
+NOARCH: the last type is used to define repositories where packages are arch and version independent, like
+
+\begin{verbatim}
+NOARCH="fluxo%http://slack.fluxo.info/packages/noarch"
+\end{verbatim}
+
+In any repository type, the supperted URL schemes are http://, ftp:// or file:// (for local repositories).
+
+\section{Repository order and precedence}
+
+As simplaret supports more than one repository definition for each type, arch or version, each definition has its own name. Definitions can have the same name just if they're dont use the same repository type and/or arch and version.
+
+There's also a priority rule between the repository types wich defines a precedence order.  Repositories are searched according the following order:
+
+\begin{itemize}
+  \item PATCHES has the highest priority: if a package from a given arch and version is not found in the first (if existent) PATCHES definition, then the next one is searched until all PATCHES definitions are searched.
+  \item Then, the package is searched in all ROOT defintions in the order they appear at repos.conf.  
+  \item The next searched repository type is REPOS in the specified arch an version, in the order they appear at repos.conf.
+  \item At last, NOARCH type is searched in the order they're defined.
+\end{itemize}
+
+In the case you're issuing an upgrade or just geting patches, simplaret by default will just search in PATCHES and ROOT definitions.
+
+At REPOS and ROOT is also possible to specify its internal search order according its subfolders.
+
+\section{Configuration file simplepkg.conf}
+
+Simplaret also stores its configurations inside simplepkg's configuration file /etc/simplepkg/simplepkg.conf. This file is well commented and you should find there a description of all supported options.
+
+\section{But why use that?}
+
+You may ask why someone wishes to use such tool.
+
+Simplaret was written with a *x86 environment in mind, where lots of jails with different archs and versions are installed. Suppose a x86\_64 with the following chroots installed:
+
+\begin{itemize}
+  \item slamd64 11.0
+  \item slackware 10.0
+  \item slackware 11.0 with additional i686 packages
+  \item uSlack (i386 uClibc) 
+\end{itemize}
+
+Keep all this stuff update manually is really a headache. Simplaret just tries to make it trivial.
+
+\section{Additional information}
+
+Simplaret was written by Silvio Rhatto (rhatto at riseup.net) and is released under GPL license. The code can be obtained from the subversion repository:
+
+\begin{verbatim}
+svn checkout svn://slack.fluxo.info/simplepkg
+\end{verbatim}
+
+Simplepkg's wiki is http://slack.fluxo.info/trac/wiki/Simplepkg and its mailing list address is http://listas.fluxo.org/wws/info/slack.
+
+\end{document}

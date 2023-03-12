@@ -1,0 +1,1096 @@
+#!/bin/bash
+#
+# createpkg: package builder using http://slack.fluxo.info/slackbuilds scripts
+# feedback: rhatto at riseup.net / rudsonalves at yahoo.com.br
+#
+#  createpkg is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  createpkg is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+# Version $Rev$ - $Author$
+#
+
+#---------------------------------------------------
+#               Createpkg functions
+#---------------------------------------------------
+
+function usage {
+
+  # Help message
+  echo -e "${red}NAME${normal}
+        createpkg - create Slackware packages from SlackBuilds in Sarava repository
+
+${red}SYNOPSIS
+        createpkg${normal} [${green}OPTIONS${normal}] [${green}program1${normal} ... ${green}programN${normal}]
+
+${red}DESCRIPTION${normal}
+        [${green}program${normal}] name to build/search (some options support more than one program)
+
+        Input ${green}OPTIONS${normal}:
+            ${red}-i${normal}, ${red}--install${normal} ${green}<program1>${normal}
+                create the package ${green}<program>${normal} and install
+            ${red}-a${normal}, ${red}--all${normal}
+                create all packages and install
+            ${red}-np${normal}, ${red}--no-deps${normal}
+                does not solve dependences
+            ${red}-d${normal}, ${red}--debug${normal} ${green}<program>${normal}
+                enable SlackBuild debug (sh -x ...)
+            ${red}-s${normal}, ${red}--search${normal} ${green}<program${normal}>
+                search for a ${green}<program>${normal}
+            ${red}-f${normal}, ${red}--info${normal} ${green}<program>${normal}
+                show description and dependences of the program
+            ${red}-l${normal}, ${red}--list${normal}
+                list all the SlackBuilds
+            ${red}--list-packages ${green}[repository]${normal}
+                list all packages in binary repositories
+            ${red}--sign${green}<package_name>${normal}
+                sign a binary package
+            ${red}--remove${green}<package_name>${normal}
+                remove a binary package
+            ${red}--sync${normal}
+                synchronize SlackBuilds repository
+            ${red}--update${normal}
+                synchronize packages repository
+            ${red}--commit${normal} ${green}["message"]${normal}
+                commit changes to binary packages' repository
+            ${red}--status${normal}
+                check binary packages' svn repository status
+            ${red}--import${normal}
+                import packages into a svn repository
+            ${red}--checkout${normal}
+                checkout binary packages from a svn repository
+            ${red}--update-keyring${normal}
+                update GPG-KEY from binary repositories
+            ${red}-h${normal}, ${red}--help${normal}
+                show this help
+
+${red}EXAMPLES${normal}
+        ${red}createpkg -i scilab${normal}
+            build and install scilab package
+        ${red}createpkg -s at*${normal}
+            search for all at* SlackBuilds scripts (at-spi, atk, ...)
+        ${red}createpkg --info pyrex${normal}
+            show pyrex description and dependences
+        $SYNC=yes {red}createpkg -i scilab${normal}
+            sync repository first, then build and install scilab package
+
+${red}AUTHOR${normal}
+        Written by ${blue}Rudson R. Alves${normal} and ${blue}Silvio Rhatto${normal} 
+
+${red}AVAILABILITY${normal}
+        by svn: ${yellow}svn checkout http://slack.fluxo.info/simplepkg${normal}
+
+${red}REPORTING BUGS${normal}
+        Report bugs to <${blue}rudsonalves[at]rra.etc.br${normal}>
+
+${red}COPYRIGHT${normal}
+        Copyright © 2006 Free Software Foundation, Inc.
+        This is free software. You may redistribute copies of it under the
+        terms of the GNU General Public License
+        <${yellow}http://www.gnu.org/licenses/gpl.html${normal}>. There is NO WARRANTY,
+        to the extent permitted by law."
+}
+
+function build_all_slackbuilds {
+
+  # Build all SlackBuilds in repository
+  createpkg --sync
+
+  cd $SLACKBUILDS_DIR
+  LIST=`find . -name *.SlackBuild | sed 's/.*\/\(.*\)\.SlackBuild$/\1/' | sort | uniq`
+  for i in $LIST; do
+    [ ! lspkg $i >/dev/null ] && createpkg -i $i
+  done
+
+}
+
+function check_config {
+
+  # Check the configuration
+  TMP=${TMP:=/tmp}
+
+  if [ ! -z "$REPOS" ]; then
+    PACKAGES_DIR="$REPOS"
+  else
+    REPOS=$PACKAGES_DIR
+  fi
+
+  # Nested folders, if configured
+  if [ ! -z "$PACKAGES_REPOS_STYLE" ]; then
+    PACKAGES_REPOS_STYLE=$(echo $PACKAGES_REPOS_STYLE | sed -e "s/none//g" -e "s/distro/`default_distro`/g" \
+                                                            -e "s/arch/`default_arch`/g" -e "s/version/`default_version`/g")
+    PACKAGES_DIR="$PACKAGES_DIR/$PACKAGES_REPOS_STYLE"
+    REPOS="$REPOS/$PACKAGES_REPOS_STYLE"
+  fi
+
+  # Create $TMP and $REPOS if need
+  [ ! -e $TMP ] && mkdir -p $TMP
+  [ ! -e $PACKAGES_DIR ] && create_repo_folder $PACKAGES_DIR
+  #
+  SLACKBUILDS_DIR=${SLACKBUILDS_DIR:=/var/simplepkg/slackbuilds}
+  #
+  SYNC=${SYNC:=$no}
+  SYNC=`convert_boolean $SYNC`
+  BASEDIR="`dirname $SLACKBUILDS_DIR`"
+
+}
+
+function solve_dep {
+
+  # Solve dependency
+  [ $# -ne 3 ] && handle_error $ERROR_PAR_NUMBER
+  local PACK="$1"
+  local COND="$2"
+  local VER="$3"
+
+  # Check package in local system
+  PACK="`echo $PACK | sed -e 's/\+/\\\+/'`"
+  INSTALLED="`check_installed $PACK`"
+  CHECK=$?
+
+  # TODO: check dependency versions
+  if [ -z "$INSTALLED" ]; then
+    if [ $CHECK -ne 0 ]; then
+      # Check package in SlackBuilds tree
+      eecho $messag "$BASENAME: processing $PACKAGE dependency $PACK"
+      SYNC=$no CREATEPKG_CHILD=$CREATEPKG_CHILD createpkg --install $PACK
+
+      # Check if the package was built and installed
+      EXIT_CODE=$?
+
+      if [ $EXIT_CODE -eq $ERROR_CREATEPKG_SLACKBUILD_NOTFOUND ]; then
+        # Try to use simplaret
+        ARCH=$CREATEPKG_ARCH simplaret --update
+        ARCH=$CREATEPKG_ARCH simplaret --install $PACK
+        [ $? -ne 0 ] && handle_error $ERROR_CREATEPKG_SLACKBUILD_NOTFOUND $PACK
+      elif [ $EXIT_CODE -ne 0 ]; then
+        handle_error $EXIT_CODE $PACK
+      fi
+
+    fi
+  fi
+
+}
+
+function find_slackbuild {
+
+  # Find SlackBuild script in the repository
+  [ $# -ne 1 ] && handle_error $ERROR_PAR_NUMBER
+  OUTPUT=`find $SLACKBUILDS_DIR -iname $1.SlackBuild`
+  [ "$OUTPUT" != "" ] && EXIT_CODE=0 || EXIT_CODE=1
+  echo $OUTPUT
+
+}
+
+function info_builds {
+
+  # Show packages info
+  if [ "$PKG_PATH" != "" ]; then
+    for i in $PKG_PATH; do
+      PACKAGE=`basename $i .SlackBuild`
+      NAME_UP=`echo $PACKAGE | tr [a-z] [A-Z]`
+      ID_VERSION=`grep '^SRC_VERSION' $i | cut -f2- -d":" | cut -f2 -d= | cut -f1 -d}`
+      eecho $commun "$NAME_UP: "
+      eecho Version: "$ID_VERSION"
+      eecho
+
+      PKG_DIR=`dirname $i`
+      if [ -e $PKG_DIR/slack-desc ]; then
+        eval "cat $PKG_DIR/slack-desc | grep '^$PACKAGE:' | cut -f2- -d:"
+        eecho $normal
+      else
+        eval "cat $i | grep '^$PACKAGE:' | cut -f2- -d:"
+        eecho $normal
+      fi
+
+      if [ -e $PKG_DIR/slack-required ]; then
+        eecho $commun "slack-required"
+        cat $PKG_DIR/slack-required | sed 's/^/ /'
+      fi
+    done
+  fi
+
+}
+
+function list_slackbuilds {
+
+  # list all available slackbuilds
+  # usage: list_slackbuilds
+
+  list_builds $SLACKBUILDS_DIR SlackBuild
+
+}
+
+function load_parameters {
+
+  # Load Createpkg parameters
+  PACKAGES_DIR="`eval_parameter PACKAGES_DIR /var/simplepkg/repos`"
+  PACKAGES_SVN="`eval_parameter PACKAGES_SVN http://slack.fluxo.info/packages`"
+  PACKAGES_REPOS_STYLE="`eval_parameter PACKAGES_REPOS_STYLE none`"
+  NOARCH_DIR="`eval_parameter PACKAGES_DIR /var/simplepkg/repos`/noarch"
+  SOURCE_DIR="`eval_parameter SOURCE_DIR /var/simplepkg/sources`"
+  SLACKBUILDS_DIR="`eval_parameter SLACKBUILDS_DIR /var/simplepkg/slackbuilds`"
+  SLACKBUILDS_SVN="`eval_parameter SLACKBUILDS_SVN http://slack.fluxo.info/slackbuilds`"
+  SVN_USER="`eval_parameter PACKAGES_SVN_USER`"
+  SVN_GROUP="`eval_parameter PACKAGES_SVN_GROUP`"
+  SOURCE_DIR_USER="`eval_parameter SOURCE_DIR_USER`"
+  SOURCE_DIR_GROUP="`eval_parameter SOURCE_DIR_GROUP`"
+
+  COLOR_MODE="`eval_parameter COLOR_MODE none`"
+  CREATEPKG_ARCH="`eval_parameter CREATEPKG_ARCH $(default_arch)`"
+  CREATEPKG_CLEANUP="`eval_parameter CREATEPKG_CLEANUP yes`"
+  CREATEPKG_AUTHOR="`eval_parameter CREATEPKG_AUTHOR`"
+
+  TMP="`eval_parameter TMP /tmp`"
+  TMP_USER="`eval_parameter TMP_USER`"
+  TMP_GROUP="`eval_parameter TMP_GROUP`"
+
+  SIGN_PACKAGES="`eval_boolean_parameter SIGN_PACKAGES $off`"
+  SIGN_PACKAGES_USER="`eval_parameter SIGN_PACKAGES_USER`"
+  SIGN_PACKAGES_KEYID="`eval_parameter SIGN_PACKAGES_KEYID`"
+  SIGN_PACKAGES_WITH_GPG_AGENT="`eval_boolean_parameter SIGN_PACKAGES_WITH_GPG_AGENT $off`"
+
+  if [ ! -z "$SIGN_PACKAGES_KEYID" ]; then
+    SIGN_PACKAGES_KEYID="`echo $SIGN_PACKAGES_KEYID | tr '[:lower:]' '[:upper:]'`"
+  fi
+
+  if [ "$SIGN_PACKAGES_WITH_GPG_AGENT" -eq $on ]; then
+    GPG_AGENT_OPTION="--use-agent"
+  else
+    GPG_AGENT_OPTION=""
+  fi
+
+  # For use at common.sh functions
+  SIGN="$SIGN_PACKAGES"
+  SIGN_KEYID="$SIGN_PACKAGES_KEYID"
+  SIGN_USER="$SIGN_PACKAGES_USER"
+
+  REMOVE_OLD_PACKAGE="`eval_boolean_parameter REMOVE_OLD_PACKAGE $off`"
+  MOVE_BIN_PACKAGE="`eval_boolean_parameter MOVE_BIN_PACKAGE $off`"
+  MOVE_SLACK_REQUIRED="`eval_boolean_parameter MOVE_SLACK_REQUIRED $off`"
+  PACKAGES_REPOS_NOARCH="`eval_boolean_parameter PACKAGES_REPOS_NOARCH $on`"
+  FORCE_MANIFEST_CHECK="`eval_boolean_parameter FORCE_MANIFEST_CHECK $off`"
+  FORCE_MANIFEST_CHECK_SIGNATURE="`eval_boolean_parameter FORCE_MANIFEST_CHECK_SIGNATURE $off`"
+
+}
+
+function repository_checkout {
+
+  # checkout a binary repository
+  # usage: repository_checkout [repository-adress]
+
+  local svn oldfolder
+
+  if [ -d "$PACKAGES_DIR" ]; then
+    oldfolder="$(mktemp -d $(echo $PACKAGES_DIR | sed -e 's/\/*$//g').XXXXXX)"
+    echo "Backing up old $folder at $oldfolder..."
+    mv $PACKAGES_DIR $oldfolder
+  fi
+
+  if [ -z "$1" ]; then
+    svn="$1"
+  else
+    svn="$PACKAGES_SVN"
+  fi
+
+  if valid_svn_repo $svn; then
+    svn checkout $svn $PACKAGES_DIR
+    chown_svn $PACKAGES_DIR && chgrp_svn $PACKAGES_DIR
+    if [ "$svn" != "$PACKAGES_SVN" ]; then
+      echo "Using svn repository different from the one pointed at $CONF."
+    fi
+  else
+    echo "Invalid repository $repository, aborting."
+    EXIT_CODE="1"
+  fi
+
+}
+
+function repository_update {
+
+  if [ ! -z "$1" ] && svn_folder $1; then
+    echo "Fetching changes from svn repository for $1..."
+    cwd="`pwd`"
+    chown_svn $1 && chgrp_svn $1
+    cd $1 && su_svn update
+    cd $cwd
+  fi
+
+}
+
+function repository_status {
+
+  local cwd
+
+  if svn_folder $PACKAGES_DIR; then
+    echo "Status of $PACKAGES_DIR."
+    cwd="`pwd`"
+    cd $PACKAGES_DIR && su_svn status
+    cd $cwd
+  fi
+
+  if svn_folder $NOARCH_DIR; then
+    cwd="`pwd`"
+    echo "Status of $NOARCH_DIR."
+    cd $NOARCH_DIR && su_svn status
+    cd $cwd
+  fi
+
+  exit 0
+
+}
+
+function binary_repository_import {
+
+  # import packages into a subversion repository
+  # usage: binary_repository_import [repository]
+
+  local repository="$1" folder
+
+  if [ -z "$repository" ]; then
+    repository="file:////var/svn/packages"
+  fi
+
+  # eval again so it doesn't include repository style information
+  folder="`eval_parameter PACKAGES_DIR /var/simplepkg/repos`"
+
+  repository_import $folder $repository
+
+}
+
+function create_repo_folder {
+
+  # Create repository directory
+  # usage: create_repo_folder <repository_folder>
+
+  local folder="$1" basedir
+
+  if [ ! -d "$folder" ]; then
+    echo "Creating packages folder $folder..."
+    basedir="`dirname $folder`"
+    if svn_folder $basedir && ! svn_check $folder; then
+      (
+        cd $basedir
+        chown_svn $basedir && chgrp_svn $basedir
+        svn_mkdir `basename $folder`/$SUBFOLDER
+      )
+    else
+      mkdir -p $folder/$SUBFOLDER
+    fi
+  elif [ ! -e $folder/$SUBFOLDER ]; then
+    if svn_folder $folder && ! svn_check $folder/$SUBFOLDER; then
+      (
+        cd $folder
+        chown_svn $folder && chgrp_svn $folder
+        svn_mkdir $SUBFOLDER
+      )
+    else
+      mkdir -p $folder/$SUBFOLDER
+    fi
+  fi
+
+}
+
+function remove_old_package_data {
+
+  # Remove old packages from repository tree
+  # usage: remove_old_package_data <repository_folder>
+
+  if [ ! -d "$1" ]; then
+    return 1
+  fi
+
+  local makepkg_repos="$1"
+
+  # Remove old PACKAGEs from repository tree
+  if [ $REMOVE_OLD_PACKAGE -eq $on ]; then
+
+    # first remove entries from CHECKSUMS.md5
+    if [ -f "$makepkg_repos/CHECKSUMS.md5" ]; then
+      sed -i "/$PACKAGE-.*-.*-.*.*$/d" $makepkg_repos/CHECKSUMS.md5
+    fi
+
+    # then remove entries from patches/CHECKSUMS.md5
+    if [ -f "$makepkg_repos/patches/CHECKSUMS.md5" ]; then
+      sed -i "/$PACKAGE-.*-.*-.*.*$/d" $makepkg_repos/patches/CHECKSUMS.md5
+    fi
+
+    # Using subversion
+    if svn_folder $makepkg_repos; then
+
+      (
+
+      cd $makepkg_repos
+
+      # Using -mindepth 2 so it doesn't delete the new PACKAGE
+      for file in `find . -mindepth 2 -name "$PACKAGE-*-*-*.*"`; do
+        candidate="`echo $file | sed -e 's/\.meta$/\.tgz/'`" # otherwise PACKAGE info functions can fail
+        candidate="`echo $candidate | sed -e 's/\.asc$//'`" # otherwise PACKAGE info functions can fail
+        # Just delete packages with different arch, version, build number or folder
+        if [ "`package_name $candidate`" == "$PACKAGE" ]; then
+          if [ "`package_version $candidate`" != "$PACKAGE_VERSION" ] || \
+             [ "`package_arch $candidate`" != "$PACKAGE_ARCH" ] || \
+             [ "`package_build $candidate`" != "$PACKAGE_BUILD" ] || \
+             [ "`package_ext $candidate`" != "$PACKAGE_EXT" ] || \
+             [ "`dirname $candidate | sed -e 's/^\.\///'`" != "`dirname $SUBFOLDER/$PKG_NAME | sed -e 's/^\.\///'`" ]; then
+            svn_del $file
+          fi
+        fi
+      done
+
+      for file in `find $makepkg_repos -name "$PACKAGE.slack-required"`; do
+        if [ $MOVE_SLACK_REQUIRED -eq $off ]; then
+          svn_del $file
+        elif [ ! -z "$SLACK_REQUIRED" ] && [ "$makepkg_repos/$SUBFOLDER/$PACKAGE.slack-required" != "$file" ]; then
+          svn_del $file
+        fi
+      done
+
+      )
+
+    else
+      # Using -mindepth 2 so it doesn't delete the new package
+      eval find $makepkg_repos -mindepth 2 $(pkg_ext_find $PACKAGE-*-*-*) -exec rm {} 2>/dev/null \;
+      find $makepkg_repos -mindepth 2 -name "$PACKAGE-*-*-*.meta" -exec rm {} 2>/dev/null \;
+      find $makepkg_repos -mindepth 2 -name "$PACKAGE-*-*-*.*.asc" -exec rm {} 2>/dev/null \;
+      find $makepkg_repos -name "$PACKAGE.slack-required" -exec rm {} 2>/dev/null \;
+    fi
+  fi
+
+}
+
+function update_metadata {
+
+  # Update repository metadata
+  # usage: update_metadata <repository_folder>
+
+  if [ ! -d "$1" ]; then
+    return 1
+  fi
+
+  local makepkg_repos="$1"
+
+  (
+
+  cd $makepkg_repos
+
+  get_sign_user
+  repo_gpg_key $makepkg_repos
+  gen_meta $SUBFOLDER/$PKG_NAME
+  gen_filelist
+  update_md5_checksum $makepkg_repos $SUBFOLDER/$PKG_NAME
+
+  # update md5 file from patches/ folder if needed
+  if [ -d "patches/" ]; then
+
+    found_patch="no"
+
+    for file in `eval find patches/ $(pkg_ext_find $PACKAGE-*-*-*)`; do
+      found_patch="yes"
+      update_md5_checksum $makepkg_repos/patches patches/$SUBFOLDER/$PKG_NAME
+    done
+
+    if [ "$found_patch" == "yes" ]; then
+      gen_patches_filelist patches
+    fi
+  fi
+
+  )
+
+}
+
+function list_packages {
+
+  # list packages in repositories
+  # usage: list_packages [repository_list]
+
+  local repository repositories="$*"
+
+  if [ -z "$repositories" ]; then
+    repositories="$PACKAGES_DIR $NOARCH_DIR"
+  fi
+
+  for repository in $repositories; do
+    echo "Packages from $repository..."
+    eval find $repository $(pkg_ext_find)
+  done
+
+}
+
+function remove_package {
+
+  # delete a package from repositories
+  # usage: remove_packages <package> [repository_list]
+
+  local package="$1" repository repositories="$2"
+
+  if [ -z "$package" ]; then
+    return 1
+  fi
+
+  if [ -z "$repositories" ]; then
+    repositories="$PACKAGES_DIR $NOARCH_DIR"
+  fi
+
+  for repository in $repositories; do
+
+      (
+
+      cd $repository
+
+      for file in `eval find . $(pkg_ext_find $package-*-*-*) -o -name "$package-*-*-*.meta" -o -name "$package-*-*-*.*.asc"`; do
+        svn_del $file
+        if [ -e "CHECKSUMS.md5" ] && echo $file | grep -q -E -e "$(pkg_ext_grep)$"; then
+          # remove md5 information
+          sed -i "/ \.*\/*$(regexp_slash $file)$/d" CHECKSUMS.md5
+          cat CHECKSUMS.md5 | gzip -9 -c - > CHECKSUMS.md5.gz
+        fi
+      done
+
+      for file in `find $repository -name "$package.slack-required"`; do
+        svn_del $file
+      done
+
+      )
+
+      update_metadata $repository
+  done
+
+}
+
+function sign_package {
+
+  # sign a package from repositories
+  # usage: sign_package <package> [repository_list]
+
+  local package="$1" repository repositories="$2"
+
+  if [ -z "$package" ]; then
+    return 1
+  fi
+
+  if [ -z "$repositories" ]; then
+    repositories="$PACKAGES_DIR $NOARCH_DIR"
+  fi
+
+  for repository in $repositories; do
+
+    (
+
+    cd $repository
+
+    for file in `eval find . $(pkg_ext_find $package-*-*-*)`; do
+
+      echo "Signing package..."
+
+      get_sign_user
+
+      if [ ! -z "$SIGN_PACKAGES_USER" ] && [ "`whoami`" != "$SIGN_PACKAGES_USER" ]; then
+        tmp_sign_folder="`mktemp -d $TMP/createpkg_sign.XXXXXX`"
+        chown $SIGN_PACKAGES_USER $tmp_sign_folder
+        su $SIGN_PACKAGES_USER -c "gpg $GPG_AGENT_OPTION --armor -sb -u $SIGN_KEYID -o $tmp_sign_folder/`basename $file`.asc $repository/$file"
+        cp $tmp_sign_folder/`basename $file`.asc $repository/$file.asc
+        rm -rf $tmp_sign_folder
+      else
+        tmp_sign_folder="`mktemp -d $TMP/createpkg_sign.XXXXXX`"
+        gpg $GPG_AGENT_OPTION --armor -sb -u $SIGN_KEYID -o $tmp_sign_folder/`basename $file`.asc $repository/$file
+        cp $tmp_sign_folder/`basename $file`.asc $repository/$file.asc
+        rm -rf $tmp_sign_folder
+      fi
+
+    done
+
+    )
+
+    update_metadata $repository
+  done
+
+}
+
+function create_package {
+
+  # Synchronize repository
+  [ $SYNC -eq $yes ] && sync_svn_repo $SLACKBUILDS_DIR $SLACKBUILDS_SVN
+
+  # Update keyring
+  update_keyring $SLACKBUILDS_DIR/GPG-KEY
+
+  # Get SlackBuild script
+  BUILD_SCRIPT="`find_slackbuild $PACKAGE`"
+
+  # Check SlackBuild script found
+  if [ -z "$BUILD_SCRIPT" ]; then
+    handle_error $ERROR_CREATEPKG_SLACKBUILD_NOTFOUND $PACKAGE
+  fi
+
+  # Select one SlackBuild
+  if [ "`echo $BUILD_SCRIPT | wc -w`" -gt 1 ]; then
+    AUX="$PS3"
+    PS3="Choice: "
+    LIST=`echo $BUILD_SCRIPT | sed 's/ /\n/g' | sed -r 's/.*\/(.*)\.SlackBuild$/\1/'`" EXIT"
+
+    select PACKAGE in `echo $LIST`; do
+      break
+    done
+
+    if [ "$PACKAGE" = "EXIT" ]; then
+      eecho $error "error: no package selected"
+      return 1
+    fi
+
+    # Select only one SlackBuild in BUILD_SCRIPT
+    BUILD_SCRIPT=`echo $BUILD_SCRIPT | sed 's/ /\n/g' | grep "/$PACKAGE.SlackBuild"`
+    PS3="$AUX"
+  else
+    PACKAGE=`basename $BUILD_SCRIPT .SlackBuild`
+  fi
+
+  # Get dirname and script name from slackbuild
+  SCRIPT_BASE="`dirname $BUILD_SCRIPT`"
+  SCRIPT_NAME="`basename $BUILD_SCRIPT`"
+  eecho $messag "$BASENAME: found script $PACKAGE.SlackBuild, now checking for dependencies"
+
+  # Sets the package's slack-required
+  if [ -f "$SCRIPT_BASE/$PACKAGE.slack-required" ]; then
+    SLACK_REQUIRED="$SCRIPT_BASE/$PACKAGE.slack-required"
+  elif [ -f "$SCRIPT_BASE/slack-required" ]; then
+    SLACK_REQUIRED="$SCRIPT_BASE/slack-required"
+  fi
+
+  if [ ! -z "$SLACK_REQUIRED" -a $NO_DEPS -ne $on ]; then
+    # This routine checks for dependencies in package's slack-required
+    (
+      grep '^[^#]' $SLACK_REQUIRED | while read dep; do
+        if [ ! -z "$dep" ]; then
+          PROGRAM="`echo $dep | awk '{ print $1 }'`"
+          CONDITION="`echo $dep | awk '{ print $2 }' | tr [=\>\<] [egl]`"
+          VERSION="`echo $dep | awk '{ print $3 }' | tr -dc '[:digit:]'`"
+          solve_dep "$PROGRAM" "$CONDITION" "$VERSION"
+        fi
+      true
+      done
+    )
+    [ $? -ne 0 ] && handle_error $error $ERROR_CREATEPKG_DEPENDENCY
+
+    eecho $messag "$BASENAME: done checking for $PACKAGE dependencies"
+  else
+    eecho $messag "$BASENAME: no unmet dependencies for $PACKAGE"
+  fi
+
+  eecho $messag "$BASENAME: processing $SCRIPT_NAME"
+
+  # Change to script base directory
+  cd $SCRIPT_BASE
+
+  # Use fakeroot if needed and available
+  if [ "`whoami`" != "root" ]; then
+    FAKEROOT="`which fakeroot`"
+    if [ "$?" == "0" ]; then
+      eecho $messag "$BASENAME: running SlackBuild with fakeroot."
+      FAKEROOT="$FAKEROOT --"
+    else
+      eecho $messag "$BASENAME: WARNING: not running as root and no fakeroot found."
+      eecho $messag "$BASENAME: WARNING: your build might not be successful."
+      FAKEROOT=""
+    fi
+  else
+    FAKEROOT=""
+  fi
+
+  # Manifest checking
+  if [ $FORCE_MANIFEST_CHECK -eq $on ] || [ $FORCE_MANIFEST_CHECK_SIGNATURE -eq $on ]; then
+    if [ ! -e "`dirname $SCRIPT_NAME`/Manifest" ]; then
+      eecho $messag "$BASENAME: ERROR: no Manifest file for $PACKAGE."
+      return 1
+    fi
+  fi
+
+  # Manifest signature checking
+  if [ $FORCE_MANIFEST_CHECK_SIGNATURE -eq $on ]; then
+    if grep -q -- "-----BEGIN PGP SIGNED MESSAGE-----" `dirname $SCRIPT_NAME`/Manifest; then
+      gpg --verify `dirname $SCRIPT_NAME`/Manifest &> /dev/null
+      if [ "$?" != "0" ]; then
+        eecho $messag "$BASENAME: ERROR: invalid signature for $PACKAGES's Manifest file."
+        return 1
+      fi
+    else
+      eecho $messag "$BASENAME: ERROR: no signed Manifest file for $PACKAGE."
+      return 1
+    fi
+  fi
+
+  # Run SlackBuild script
+  [ $DEBUG -eq $off ] && SHELL_FLAG="+x" || SHELL_FLAG="-x"
+  (
+    LANG=en_US \
+    TMP=$TMP \
+    SRC_DIR=${SRC_DIR:=$SOURCE_DIR} \
+    SRC=${SRC_DIR:=$SOURCE_DIR} \
+    ARCH=${ARCH:=$CREATEPKG_ARCH} \
+    COLOR=${COLOR:=$COLOR_MODE} \
+    REPOS=${REPOS:=$PACKAGES_DIR} \
+    CLEANUP=${CLEANUP:=$CREATEPKG_CLEANUP} \
+    SLACKBUILD_PATH="/" \
+    INTERACT=no $FAKEROOT sh $SHELL_FLAG ./$SCRIPT_NAME
+  )
+
+  # Check if package was built
+  handle_error $? $PACKAGE
+
+  # Fix source folder user
+  if [ ! -z "$SOURCE_DIR_USER" ]; then
+    chown -R $SOURCE_DIR_USER $SOURCE_DIR
+  fi
+
+  # Fix source folder group
+  if [ ! -z "$SOURCE_DIR_GROUP" ]; then
+    chgrp -R $SOURCE_DIR_GROUP $SOURCE_DIR
+  fi
+
+  # Get package name, arch, version and build number
+  PKG_NAME="`ls -1 -c $PACKAGES_DIR/$PACKAGE-*-*-*.* | grep -E -e "$(pkg_ext_grep)$" | head -n 1 | xargs basename`"
+  PACKAGE_NAME="`package_name $PKG_NAME`"
+  PACKAGE_VERSION="`package_version $PKG_NAME`"
+  PACKAGE_ARCH="`package_arch $PKG_NAME`"
+  PACKAGE_BUILD="`package_build $PKG_NAME`"
+  PACKAGE_EXT="`package_ext $PKG_NAME`"
+
+  # Update package author
+  if [ ! -z "$CREATEPKG_AUTHOR" ]; then
+    AUTHOR="`echo $PACKAGE_BUILD | sed -e 's/^[0-9]*//'`"
+    if [ "$AUTHOR" != "$CREATEPKG_AUTHOR" ]; then
+      echo "Changing package build author..."
+      BUILD_NUMBER="`echo $PACKAGE_BUILD | sed -e "s/$AUTHOR$//"`"
+      NEW_BUILD="$BUILD_NUMBER""$CREATEPKG_AUTHOR"
+      mv $PACKAGES_DIR/$PKG_NAME $PACKAGES_DIR/$PACKAGE_NAME-$PACKAGE_VERSION-$PACKAGE_ARCH-$NEW_BUILD.$PACKAGE_EXT
+      PKG_NAME="$PACKAGE_NAME-$PACKAGE_VERSION-$PACKAGE_ARCH-$NEW_BUILD.$PACKAGE_EXT"
+      PACKAGE_BUILD="$NEW_BUILD"
+      AUTHOR="$CREATEPKG_AUTHOR"
+      echo "New package name is $PKG_NAME."
+    fi
+  fi
+
+  # Sign package
+  if [ $SIGN_PACKAGES -eq $on ]; then
+
+    echo "Signing package..."
+
+    get_sign_user
+
+    if [ ! -z "$SIGN_PACKAGES_USER" ] && [ "`whoami`" != "$SIGN_PACKAGES_USER" ]; then
+      tmp_sign_folder="`mktemp -d $TMP/createpkg_sign.XXXXXX`"
+      chown $SIGN_PACKAGES_USER $tmp_sign_folder
+      su $SIGN_PACKAGES_USER -c "gpg $GPG_AGENT_OPTION --armor -sb -u $SIGN_KEYID -o $tmp_sign_folder/$PKG_NAME.asc $PACKAGES_DIR/$PKG_NAME"
+      cp $tmp_sign_folder/$PKG_NAME.asc $PACKAGES_DIR/$PKG_NAME.asc
+      rm -rf $tmp_sign_folder
+    else
+      tmp_sign_folder="`mktemp -d $TMP/createpkg_sign.XXXXXX`"
+      gpg $GPG_AGENT_OPTION --armor -sb -u $SIGN_KEYID -o $tmp_sign_folder/$PKG_NAME.asc $PACKAGES_DIR/$PKG_NAME
+      cp $tmp_sign_folder/$PKG_NAME.asc $PACKAGES_DIR/$PKG_NAME.asc
+      rm -rf $tmp_sign_folder
+    fi
+
+  fi
+
+  # Select repository directory
+  if [ $MOVE_BIN_PACKAGE -eq $on ]; then
+    SUBFOLDER="$( echo ${SCRIPT_BASE#$SLACKBUILDS_DIR/} )"
+    NEW_REPOS=$PACKAGES_DIR/$SUBFOLDER
+  else
+    SUBFOLDER="."
+    NEW_REPOS=$PACKAGES_DIR
+  fi
+
+  # Update information from remote repository
+  repository_update $PACKAGES_DIR
+
+  # Create the repository folders
+  create_repo_folder $PACKAGES_DIR
+
+  # Remove old packages from repository tree
+  remove_old_package_data $PACKAGES_DIR
+
+  # Move package to SlackBuilds-like tree
+  if [ $MOVE_BIN_PACKAGE -eq $on ]; then
+
+    mv $PACKAGES_DIR/$PKG_NAME $NEW_REPOS/
+    if [ -e "$PACKAGES_DIR/$PKG_NAME.asc" ]; then
+      mv $PACKAGES_DIR/$PKG_NAME.asc $NEW_REPOS/
+    fi
+
+    if svn_folder $NEW_REPOS; then
+      (
+        cd $NEW_REPOS
+        chown_svn $PACKAGES_DIR && chgrp_svn $PACKAGES_DIR
+        svn_add $PKG_NAME
+        svn_add $PKG_NAME.asc
+      )
+    fi
+
+    # Move package's slack-required to binary repository
+    if [ $MOVE_SLACK_REQUIRED -eq $on ]; then
+      if [ ! -z "$SLACK_REQUIRED" ]; then
+        svn_copy $SLACK_REQUIRED $NEW_REPOS/$PACKAGE.slack-required
+      fi
+    fi
+
+  fi
+
+  # Update repository metadata
+  update_metadata $PACKAGES_DIR
+
+  # General cleanup
+  echo Cleaning up the repository...
+  svn_remove_empty_folders $PACKAGES_DIR
+
+  # Update noarch repository
+  if [ $PACKAGES_REPOS_NOARCH -eq $on ] && [ "`package_arch $PKG_NAME`" == "noarch" ]; then
+    repository_update $NOARCH_DIR
+    echo Copying package to noarch repository...
+    create_repo_folder $NOARCH_DIR
+    remove_old_package_data $NOARCH_DIR
+    svn_copy $NEW_REPOS/$PKG_NAME $NOARCH_DIR/$SUBFOLDER/
+    svn_copy $NEW_REPOS/`strip_pkg_ext $PKG_NAME`.meta $NOARCH_DIR/$SUBFOLDER/
+    svn_copy $NEW_REPOS/`basename $PKG_NAME`.asc $NOARCH_DIR/$SUBFOLDER/
+    svn_copy $NEW_REPOS/$PACKAGE.slack-required $NOARCH_DIR/$SUBFOLDER/
+    update_metadata $NOARCH_DIR
+    svn_remove_empty_folders $NOARCH_DIR
+  fi
+
+  # Install package
+  if [ "$INSTALL" -eq $on ]; then
+    upgradepkg --install-new $NEW_REPOS/$PKG_NAME
+  fi
+
+  echo "Package saved at $NEW_REPOS/$PKG_NAME"
+
+  if [ $PACKAGES_REPOS_NOARCH -eq $on ] && [ "`package_arch $PKG_NAME`" == "noarch" ]; then
+    echo "Aditional copy saved at $NOARCH_DIR/$SUBFOLDER/$PKG_NAME"
+  fi
+
+  return $EXIT_CODE
+
+}
+
+function build_queue {
+
+  # createpkg's build queue
+  # usage: build_queue <package1> ... <packageN>
+
+  local unable_to_install last_status built=0 total=0
+
+  if [ -z "$1" ]; then
+    return
+  fi
+
+  for PACKAGE in $*; do
+    create_package
+    last_status="$?"
+    let total++
+    if [ "$last_status" != "0" ]; then
+      unable_to_install="$unable_to_install\n\t`echo $PACKAGE | sed -e 's/\\\+/\+/'`"
+    else
+      let built++
+    fi
+  done
+
+  if [ ! -z "$unable_to_install" ] && [[ $total > 1 ]]; then
+    eecho $messag "$BASENAME: done building $built of $total requested SlackBuilds."
+    eecho $messag "$BASENAME: unable to create the following packages:"
+    echo -e "$unable_to_install"
+  fi
+
+  # Fix possible $TMP removal
+  mkdir -p $TMP
+
+  # Fix $TMP user
+  if [ ! -z "$TMP_USER" ]; then
+    chown $TMP_USER $TMP
+  fi
+
+  # Fix $TMP group
+  if [ ! -z "$TMP_GROUP" ]; then
+    chgrp $TMP_GROUP $TMP
+  fi
+
+  # Exit with last build package exit status
+  exit $last_status
+
+}
+
+#---------------------------------------------------
+#                 Starting createpkg
+#---------------------------------------------------
+# Common functions
+COMMON="/usr/libexec/simplepkg/common.sh"
+SIMPLEPKG_CONF="/etc/simplepkg/simplepkg.conf"
+BASENAME="`basename $0`"
+EXIT_CODE=0
+
+if [ -f "$COMMON" ]; then
+  source $COMMON
+else
+  echo "error: file $COMMON found, check your $BASENAME installation"
+  exit 0
+fi
+
+set_constants
+
+# Load simplepkg.conf variables
+load_parameters
+
+# Loading error codes
+error_codes
+
+# Load slackbuildrc definitions
+if [ -f ~/.slackbuildrc ]; then
+  source ~/.slackbuildrc
+else
+  source /etc/slackbuildrc 2>/dev/null
+fi
+
+# Select color mode: gray, color or none (*)
+color_select $COLOR_MODE
+
+# This is used to show how many children process we have
+if [ -z "$CREATEPKG_CHILD" ]; then
+  CREATEPKG_CHILD=1
+else
+  let CREATEPKG_CHILD++
+fi
+
+BASENAME="`basename $0`[$CREATEPKG_CHILD]"
+
+check_config
+check_svn_repo $SLACKBUILDS_DIR $SLACKBUILDS_SVN
+
+INSTALL=$off
+NO_DEPS=$off
+DEBUG=$off
+
+case $1 in
+  '--all'|'-a')
+    # build all SlackBuilds in repository
+    build_all_slackbuilds
+    exit $EXIT_CODE
+  ;;
+  '--search'|'-s')
+    if [ $# -ne 2 ]; then
+      list_slackbuilds
+    else
+      LIST=`find_slackbuild $2`
+      if [ -z $LIST ]; then
+        EXIT_CODE=1
+      else
+        for i in $LIST; do
+          echo $i #| sed 's/.*\/\([^\/]\+\)\.[Ss]lack[Bb]uild$/  \1/'
+        done
+      fi
+    fi
+    exit $EXIT_CODE
+  ;;
+  '--info'|'-f')
+    [ $# -ne 2 ] && usage   # two parameters is required
+    PKG_PATH=`find_slackbuild $2`
+    info_builds
+    exit $EXIT_CODE
+  ;;
+  '--install'|'-i')
+    [ $# -ne 2 ] && usage   # two parameters is required
+    shift
+    PACKAGE="$1"
+    INSTALL=$on
+    build_queue $*
+  ;;
+  '--no-deps'|'-nd')
+    [ $# -ne 2 ] && usage   # two parameters is required
+    shift
+    NO_DEPS=$on
+    PACKAGE="$1"
+    build_queue $*
+  ;;
+  '--debug'|'-d')
+    [ $# -ne 2 ] && usage   # two parameters is required
+    shift
+    PACKAGE="$1"
+    DEBUG=$on
+    build_queue $*
+  ;;
+  '--sync')
+    sync_svn_repo $SLACKBUILDS_DIR $SLACKBUILDS_SVN
+    exit $EXIT_CODE
+  ;;
+  '--help'|'-h'|'')
+    usage
+    exit $EXIT_CODE
+  ;;
+  '--list'|'-l')
+    list_slackbuilds
+    exit $EXIT_CODE
+  ;;
+  '--update')
+    repository_update $PACKAGES_DIR
+    repository_update $NOARCH_DIR
+    exit $EXIT_CODE
+  ;;
+  '--commit')
+    shift
+    commit_changes $PACKAGES_DIR "`basename $PACKAGES_DIR:`" $*
+    if [ $PACKAGES_REPOS_NOARCH -eq $on ]; then
+      commit_changes $NOARCH_DIR "noarch:" $*
+    fi
+    exit $EXIT_CODE
+  ;;
+  '--status')
+    repository_status
+    exit $EXIT_CODE
+  ;;
+  '--import')
+    shift
+    binary_repository_import $*
+    exit $EXIT_CODE
+  ;;
+  '--checkout')
+    shift
+    repository_checkout $*
+    exit $EXIT_CODE
+  ;;
+  '--update-keyring')
+    get_sign_user
+    repo_gpg_key $PACKAGES_DIR --update
+    if [ $PACKAGES_REPOS_NOARCH -eq $on ]; then
+      repo_gpg_key $NOARCH_DIR --update
+    fi
+    exit $EXIT_CODE
+  ;;
+  '--list-packages')
+    shift
+    list_packages $*
+    exit $EXIT_CODE
+  ;;
+  '--sign')
+    shift
+    sign_package $*
+    exit $EXIT_CODE
+  ;;
+  '--remove')
+    shift
+    remove_package $*
+    exit $EXIT_CODE
+  ;;
+  *)
+    if [ "${1:0:1}" != "-" ]; then
+      build_queue $*
+    else
+      usage
+    fi
+  ;;
+esac

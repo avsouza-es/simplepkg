@@ -1,0 +1,45 @@
+#!/bin/sh
+#
+## Slackware init script for postfix
+##   20030828 Manolis Tzanidakis
+#
+
+postfix_start() {
+        if [ -x /usr/sbin/postfix ]; then
+                echo -n "Starting postfix MTA:  "
+                echo "/usr/sbin/postfix start"
+                /usr/sbin/postfix start 2>/dev/null
+        fi
+}
+
+postfix_stop() {
+        /usr/sbin/postfix stop 2>/dev/null
+}
+
+postfix_restart() {
+        sh $0 stop
+	sleep 1
+        sh $0 start
+}
+
+postfix_reload() {
+        /usr/sbin/postfix reload 2>/dev/null
+}
+
+case "$1" in
+        'start')
+                postfix_start
+                ;;
+        'stop')
+                postfix_stop
+                ;;
+        'restart')
+                postfix_restart
+                ;;
+        'reload')
+                postfix_reload
+                ;;
+        *)
+                echo "usage $0 start|stop|restart|reload"
+esac
+

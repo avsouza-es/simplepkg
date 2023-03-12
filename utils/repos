@@ -1,0 +1,87 @@
+#!/bin/bash
+#
+# repos script got from
+# http://software.jaos.org/BUILD/slapt-get/FAQ.html#slgFAQ17
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# any later version.
+#
+# Changes by rhatto at riseup.net to fit http://slack.fluxo.info needs
+#
+
+BASENAME="`basename $0`"
+REPOS_CONF="/etc/simplepkg/repos.conf"
+COMMON="/usr/libexec/simplepkg/common.sh"
+
+if [ -f "$COMMON" ]; then
+  source $COMMON
+else
+  echo "error: file $COMMON found, check your $BASENAME installation"
+  exit 1
+fi
+
+function usage {
+
+  echo "`basename $0` [pkg [file]|all|new|svnmeta|PACKAGESTXT|FILELIST|MD5]"
+
+}
+
+function do_all {
+
+  for pkg in `find . -type f $(pkg_ext_find) -print`; do
+    gen_meta $pkg
+  done
+  $0 PACKAGESTXT
+  $0 FILELIST
+  $0 MD5
+
+}
+
+# ---------------------------------
+#              main
+# ---------------------------------
+
+case "$1" in
+  pkg)
+      if [ -n "$2" ]; then
+        gen_meta $2
+      else
+        usage
+      fi
+    ;;
+    all)
+      do_all
+    ;;
+    new)
+      for pkg in `find . -type f $(pkg_ext_find) -print`; do
+        if [ ! -f $(strip_pkg_ext $pkg).meta ]; then
+          gen_meta $pkg
+        fi
+      done
+    ;;
+    svnmeta)
+      svn_add_meta
+    ;;
+    PACKAGESTXT)
+      gen_packages_txt .
+      gen_packages_txt patches
+    ;;
+    FILELIST)
+      gen_filelist
+      gen_patches_filelist patches
+    ;;
+    MD5)
+      gen_md5_checksums .
+      gen_md5_checksums patches
+    ;;
+    usage)
+      usage
+    ;;
+    *)
+      do_all
+      svn_add_meta
+    ;;
+esac
+

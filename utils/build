@@ -1,0 +1,54 @@
+#!/bin/bash
+#
+#  build is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  build is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+
+BASENAME="`basename $0`"
+COMMON="/usr/libexec/simplepkg/common.sh"
+
+if [ -f "$COMMON" ]; then
+  source $COMMON
+else
+  echo "error: file $COMMON found, check your $BASENAME installation"
+  exit 1
+fi
+
+ARCH="`default_arch`"
+LIBDIR="/usr/lib"
+if [ "$ARCH" = "x86_64" ]; then
+  FPIC="export CFLAGS=-fPIC"
+  LDFLAGS='export LDFLAGS="-L/lib64 -L/usr/lib64"'
+  LIBDIR="/usr/lib64"
+fi
+
+CONF="./configure --prefix=/usr --sysconfdir=/etc --libdir=$LIBDIR"
+INSTALL="make DESTDIR=`pwd`/installation/ install"
+HELP="./configure --help | less"
+MAKE="make"
+
+case $1 in
+  "--conf") $CONF ;;
+  "--fpic") $FPIC ;;
+  "--ld") $LDFLAGS ;;
+  "--make") $MAKE ;;
+  "--install") $INSTALL ;;
+  "--help") $HELP ;;
+  "--show")
+    echo $FPIC
+    echo $LDFLAGS
+    echo $CONF
+    echo $INSTALL
+    ;;
+  *) $CONF ; $MAKE ;;
+esac
+

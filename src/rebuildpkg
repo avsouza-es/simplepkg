@@ -1,0 +1,86 @@
+#!/bin/bash
+#
+# rebuildpkg: build a package from a /var/log/packages entry
+#
+# feedback: rhatto at riseup.net | gpl
+#
+#  Rebuildpkg is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  Rebuildpkg is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+
+COMMON="/usr/libexec/simplepkg/common.sh"
+
+function usage {
+  echo "usage: ROOT=/otherroot `basename $0` <package-name>"
+}
+
+if [ -f "$COMMON" ]; then
+  source $COMMON
+else
+  echo "error: file $COMMON found, check your `basename $0` installation"
+  exit 1
+fi
+
+if [ -z "$1" ]; then
+  usage
+  exit 1
+fi
+
+pack="$1"
+
+for file in `ls $ROOT/var/log/packages/$pack*`; do
+  if [[ "`package_name $file.tgz`" == "$pack" ]]; then
+    package_file="$file"
+    break
+  fi
+done
+
+if [ -z "$package_file" ]; then
+  echo error: package $pack does not exist
+  exit 1
+fi 
+
+if [ -d "$TMP/package-$pack" ]; then
+  rm -rf $TMP/package-$pack
+fi
+
+mkdir $TMP/package-$pack
+cd $TMP/package-$pack
+
+for file in `grep -v -e "^PACKAGE NAME:" -e "^UNCOMPRESSED PACKAGE SIZE:"    \
+                     -e "^COMPRESSED PACKAGE SIZE:" -e "^PACKAGE LOCATION:"  \
+                     -e "^PACKAGE DESCRIPTION:" -e "^$pack:" -e "^FILE LIST:" $package_file`; do
+
+  if [ "$file" != "install" ] && [ "$file" != "install/slack-desc" ] && [ "$file" != "install/doinst,sh" ]; then
+    if [ -d /$file ]; then
+      mkdir -p $TMP/package-$pack/$file
+    elif [ -f /$file ]; then
+      cp /$file $TMP/package-$pack/$file
+    else
+      echo file /$file was not found, please add it manually, exploding and making the package again
+    fi
+  fi
+
+done
+
+mkdir $TMP/package-$pack/install
+grep "^$pack:" $package_file > $TMP/package-$pack/install/slack-desc
+
+package_name="`grep "PACKAGE NAME:" $package_file | awk '{ print $3 }'`"
+
+if [ -f "$ROOT/var/log/scripts/$package_name" ]; then
+  cp $ROOT/var/log/scripts/$package_name $TMP/package-$pack/install/doinst.sh
+fi
+
+makepkg $package_name.$MKBUILD_COMPRESS
+mv $package_name.$MKBUILD_COMPRESS $TMP/
+echo "done: package rebuilt and stored at $TMP/$package_name.$MKBUILD_COMPRESS"

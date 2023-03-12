@@ -1,0 +1,397 @@
+\documentclass{article}
+\usepackage[brazilian]{babel}
+\usepackage[latin1]{inputenc}
+\usepackage[dvips]{graphics}
+\usepackage{hyperref}
+\usepackage{html,makeid}
+
+\title{Gerenciamento de instalações e metapacotes com o simplepkg}
+\author{Silvio Rhatto}
+
+\begin{document}\label{start}
+\maketitle
+
+\begin{abstract}
+O \emph{simplepkg} é um sistema de gerenciamento de sistemas slackware que roda sobre o pkgtool. Ele é composto por vários scripts que desempenham funções de administração e desenvolvimento de sistemas do tipo Slackware, procurando fechar um circuito de produção, envolvendo a construção, a instalação de pacotes e até mesmo a instalação do sistema de forma automatizada.
+
+Do lado do desenvolvedor/a, ele ajuda na criação de SlackBuilds e construção de pacotes.  Do lado do administrador/a, ele possibilita a instalação automatizada de sistemas, instalação de pacotes e a criação de "templates" de instalação -- que contém todos os arquivos de configuração, informações de permissões e scripts de pós-instalação de uma dada máquina ou jaula.
+\end{abstract}
+
+\section{Descrição}
+
+Todas as distribuições de GNU/Linux já tem algum sistema de empacotamento amadurecido. A questão agora é a praticidade de instalar e controlar o que está instalado, tanto pacotes como arquivos de configuração de uma máquina, além da facilidade na criação de pacotes.
+
+Imagine por exemplo se você precisa manter uma lista de pacotes de 200 máquinas slackware, sendo que algumas são usadas como desktop, outras como servidores web, alguma sendo o servidor de email e assim por diante. Imagine agora que você perca o disco de algumas dessas máquinas ou que precise cotidianamente reinstalar ou atualizar um sistema.
+
+Usar o cd de instalação do slackware e configurar na mão toda a vez que der um pau faria com que você ficasse louco/a e desperdiçasse muito tempo, além do que sempre ocorre de esquecermos algum detalhe ou pacote durante a configuração do sistema. Manter um backup completo de cada máquina, por outro lado, pode ser muito custoso se o número delas for muito grande.
+
+O \emph{simplepkg} permite que você mantenha um template para cada grupo de máquinas e com apenas um comando instalar o template numa partição. Além do template, você precisa configurar o \emph{simplepkg} para obter pacotes de um repositório local ou remoto.
+
+Gerenciar instalações e pacotes não é tudo o que o \emph{simplepkg} faz. Ele pode ser usado até na criação de jaula e vservers, podendo manter toda a configuração das máquinas num repositório Subversion.
+
+O \emph{simplepkg} funciona não apenas com o Slackware mas com qualquer port (oficial ou não) que siga minimamente os padrões oficiais.
+
+\section{Arquitetura}
+
+O \emph{simplepkg} é um conjunto de scripts escritos com a filosofia KISS (Keep It Simple, Stupid) em mente.  Ele é um sistema muito simples, composto pelos seguintes comandos:
+
+\begin{itemize}
+  \item mkjail: constrói uma jaula/instalação de slackware numa pasta
+  \item templatepkg: criar ou adiciona pacotes a um template
+  \item lspkg: lista pacotes instalados
+  \item jail-update: inverso do jail-commit
+  \item jail-commit: atualiza o template
+  \item rebuildpkg: reconstrói um pacote a partir de sua entrada no /var/log/packages
+  \item simplaret: obtém pacotes de repositórios locais ou remotos
+  \item createpkg: baixa, compila e empacota software de acordo com scripts presentes num repositório
+  \item repos: cria e mantém repositórios
+  \item mkbuild: cria scripts de construção de pacotes
+\end{itemize}
+
+\section{Instalando o simplepkg}
+
+Para baixar o pacote do \emph{simplepkg}, vá em \htmladdnormallink{http://slack.fluxo.info/packages/noarch/}{http://slack.fluxo.info/packages/noarch/}. Depois, basta usar o comando
+
+\begin{verbatim}
+installpkg simplepkg-VERSAO-noarch-BUILD.tgz
+\end{verbatim}
+
+\section{Usando o simplepkg}
+
+As três principais aplicações desse conjunto são:
+
+\begin{itemize}
+  \item Gerenciamento de pacotes
+  \item Criação e manutenção de jaulas
+  \item Criação de pacotes
+\end{itemize}
+
+O gerencamento de pacotes é feito através do \htmladdnormallink{simplaret}{http://slack.fluxo.info/simplaret}, e por ser algo bem específico está detalhado no artigo correspondente. As seções a seguir mostrarão como o \emph{simplepkg} pode ser utilizado para criar e manter jaulas, assim como também criar pacotes.
+
+\section{Criando templates de instalação}
+
+Originalmente, o \emph{simplepkg} foi desenvolvido para ajudar na automatização de instalações de sistemas slackware. Para isso, ele trabalha com templates -- listas com pacotes instalados, scripts e arquivos de configuração -- permitindo criar perfis de instalação que podem ser então usados para instalar o sistema numa outra partição ou criar um chroot.
+
+A construção de um template é feita através do programa templatepkg. Para criar um template de nome "meu-slackware" contendo a lista de pacotes atualmente instalados no seu sistema, digite
+
+\begin{verbatim}
+templatepkg -c meu-slackware
+\end{verbatim}
+
+A opção -c (ou --create) criará a pasta /etc/simplepkg/templates/meu-slackware, que conterá os seguintes componentes:
+
+\begin{itemize}
+  \item \emph{/etc/simplepkg/templates/meu-slackware/meu-slackware.d}: cópia de arquivos de configuração
+  \item \emph{/etc/simplepkg/templates/meu-slackware/meu-slackware.s}: scripts de pós-instalação
+  \item \emph{/etc/simplepkg/templates/meu-slackware/meu-slackware.perms}: informações sobre arquivos
+  \item \emph{/etc/simplepkg/templates/meu-slackware/meu-slackware.template}: lista de pacotes
+\end{itemize}
+
+Esses quatro componentes são suficientes para armazenar todas as características de uma instalação de slackware: a lista de pacotes controla o software instalado (a partir do conteúdo da pasta \emph{/var/log/packages}), a cópia dos arquivos de configuração controla as personalizações feitas para o uso dos aplicativos e os scripts de pós-instalação cuidam de qualquer rotina que precisa ser realizada exatamente após a instalação do sistema. Já o arquivo de informações sobre arquivos contém as permissões, o dono/a e grupo de cada arquivo de configuração presente no template.
+
+Se você quiser criar um template a partir de uma instalação de slackware presente numa outra partição do sistema que não seja a raíz, basta usar um comando do tipo
+
+\begin{verbatim}
+templatepkg -c meu-slackware /mnt/slackware
+\end{verbatim}
+
+onde /mnt/slackware é o local onde o sistema alternativo está instalado. Após criado, o template possuirá apenas a lista de pacotes contendo o nome dos aplicativos instalados no seu sistema. Como a pasta /var/log/packages não preserva a ordem de instalação dos pacotes, então talvez você queira editar manualmente a lista de pacotes de um template. Para isso, use o comando
+
+\begin{verbatim}
+templatepkg -e meu-slackware
+\end{verbatim}
+
+Para adicionar um arquivo de configuração no seu novo template, basta dar um comando como
+
+\begin{verbatim}
+templatepkg -a meu-slackware /etc/hosts
+\end{verbatim}
+
+Isso adicionará o arquivo /etc/hosts no template "meu-slackware". Além de salvar o arquivo e copiá-lo automaticamente quando você instalar seu sistema, o \emph{simplepkg} ainda pode tomar conta de qualquer alteração que o /etc/hosts sofrer no sistema, seja mudança no conteúdo do arquivo, dono ou permissão. Se você ainda estiver armazenando seus templates num repositório svn (o que veremos a seguir), o \emph{simplepkg} pode ainda manter um histórico completo das alterações do arquivo.
+
+ATENÇÂO: evite ao máximo deixar arquivos contendo senhas ou chaves privadas num template. O lugar mais adequado para deixar esse tipo de coisa é num backup seguro.
+
+\section{Criando jaulas e replicando instalações}
+
+Uma vez que um template foi criado com uma lista de pacotes e opcionalmente com arquivos de configuração e scripts de pós-instalação (que serão detalhados a seguir), você pode replicar sua instalação de slackware utilizando o comando
+
+\begin{verbatim}
+mkjail jaula meu-slackware
+\end{verbatim}
+
+Isso cria uma nova árvore do slackware em /vservers/jaula contendo todos os pacotes e arquivos de configuração do template "meu-slackware". A instalação dos pacotes será feita pelo aplicativo \htmladdnormallink{simplaret}{http://slack.fluxo.info/simplaret}, que deve estar configurado corretamente e cuja configuração padrão deve funcionar para a maioria dos casos.
+
+Se você quiser instalar essa jaula em outro local que não seja a pasta /vservers (esse local padrão pode ser mudado pelo arquivo de configuração do \emph{simplepkg}), basta usar um comando do tipo
+
+\begin{verbatim}
+ROOT=/mnt mkjail hda2 meu-slackware
+\end{verbatim}
+
+O comando acima faz exatamente o que você está pensando: replica sua instalação slackware em /mnt/hda2, dispensando totalmente o programa de instalação do slackware!
+
+Caso nenhum template for especificado, o mkjail utiliza o template /etc/simplepkg/defaults. O \emph{simplepkg} já vem com alguns templates padrões, presentes em /etc/simplepkg/defaults/templates.
+
+\section{Scripts de pós-instalação}
+
+Opcionalmente, é possível manter scripts de pós-instalação num template. Tais script são executados exatamente
+após a instalação de uma jaula e cópia de arquivos de configuração pelo mkjail. Para criar ou editar um script
+de pós-instalação, use um comando como
+
+\begin{verbatim}
+templatepkg -b meu-slackware nome-do-script.sh
+\end{verbatim}
+
+Isso adicionará o script nome-do-script.sh no template "meu-slackware". O mkjail passa dois argumentos para cada script de pós-instalação: a pasta superior e o nome da jaula ("/mnt" e "hda2" no nosso exemplo anterior). Assim, um exemplo de script seria algo como
+
+\begin{verbatim}
+#!/bin/bash
+chroot $1/$2/ sbin/ldconfig
+\end{verbatim}
+
+\section{Listando o conteúdo de um template}
+
+Para listar os templates disponíveis ou o conteúdo de um template, use comandos como
+
+\begin{verbatim}
+templatepkg -l
+templatepkg -l meu-slackware
+\end{verbatim}
+
+\section{Removendo arquivos de um template}
+
+Analogamente à forma como se adicona arquivos num template, removê-los pode ser feito com o seguinte comando:
+
+\begin{verbatim}
+templatepkg -d meu-slackware /etc/hosts
+\end{verbatim}
+
+Isso remove o arquivo /etc/hosts do template "meu-slackware".
+
+\section{Apagando um template}
+
+Para apagar um template, basta utilizar um comando como
+
+\begin{verbatim}
+templatepkg -r meu-slackware
+\end{verbatim}
+
+\section{Atualizando um template}
+
+Agora que já abordamos as opções do templatepkg, é hora de visitarmos um outro aplicativo, desta vez utilizado para manter um template atualizado. O jail-commit é um script que copia as alterações dos arquivos (conteúdo, propriedade e permissões) de um template a partir do conteúdo de uma jaula ou instalação.
+
+Por exemplo, caso se queira copiar as alterações da jaula /mnt/hda2 no template "meu-slackware", basta usar o comando
+
+\begin{verbatim}
+jail-commit /mnt/hda2 meu-slackware
+\end{verbatim}
+
+Além da lista de pacotes do template "meu-slackware" ser atualizada de acordo com a lista de pacotes presente em /mnt/hda2/var/log/packages, todos os arquivos de configuração presentes no template "meu-slackware" serão comparados com os correspondentes da pasta /mnt/hda2 e as diferenças são copiadas para o template. Da mesma forma, as permissões e informação de dono/grupo dos arquivos também é atualizada no template.
+
+O comando jail-commit possibilita que um template sempre esteja atualizado e refletindo a configuração atual de uma instalação de slackware. Se você quiser atualizar apenas a lista de pacotes de um template, porém, use
+
+\begin{verbatim}
+templatepkg -u meu-template
+\end{verbatim}
+
+Para facilitar ainda mais o controle das alterações do sistema, existe ainda uma facilidade do arquivo /etc/simplepkg/jailist. Esse arquivo serve, além de outros propósitos descritos na \htmladdnormallink{documentação do simplaret}{http://slack.fluxo.info/simplaret}, para que o jail-commit saiba de antemão quais são as instalações de sistema do tipo Slackware presentes numa máquina, além da instalação principal na raíz do sistema.
+
+Suponha que uma máquina possua duas instalações de slackware, além da principal (raíz):
+
+\begin{itemize}
+  \item /mnt/slackware-1 usando o template "slackware-1"
+  \item /mnt/slackware-2 usando o template "slackware-2"
+\end{itemize}
+
+Se o arquivo /etc/simplepkg/jailist contiver as seguintes linhas,
+
+\begin{verbatim}
+/mnt/slackware-1
+/mnt/slackware-2
+\end{verbatim}
+
+então o comando
+
+\begin{verbatim}
+jail-commit
+\end{verbatim}
+
+atualizará o template "slackware-1" de acordo com o conteúdo da jaula /mnt/slackware-1 e o template "slackware-2" com o conteúdo da jaula /mnt/slackware-2. Se, além desses dois templates, existir um outro de nome "main", então o jail-commit sem argumentos também copiará as atualizações da instalação raíz, deixando-as no template "main".
+
+Você pode inclusive colocar uma entrada no crontab do tipo
+
+\begin{verbatim}
+20 4 * * * jail-commit
+\end{verbatim}
+
+para que seus templates sejam atualizados diariamente. Se você ainda possui o envio de emails configurado na sua máquina, então a saída do jail-commit será enviada pelo cron diariamente para seu email, contendo diffs das alterações de arquivos de configuração a lista de pacotes adicionados ou removidos no sistema.
+
+\section{Restaurando arquivos de configuração numa jaula}
+
+A operação contrária ao que o jail-commit faz também é possível: suponha que você mexeu na configuração do sistema mas se arrependeu das alterações e deseja voltar a configuração para o modo como ela se encontra no seu template, basta usar o comando
+
+\begin{verbatim}
+jail-update /mnt/hda2 meu-slackware
+\end{verbatim}
+
+\section{Armazenando as configurações no repositório Subversion}
+
+Para aumentar ainda mais a flexibilidade e o controle do conteúdo dos templates, é possível armazená-los num repositório Subversion. Para isso, edite o arquivo /etc/simplepkg/simplepkg.conf e deixe o parâmetro de configuração \emph{TEMPLATES\_UNDER\_SVN} com o valor "yes".
+
+Depois, crie um repositório subversion para armazenar seus templates, usando algo como
+
+\begin{verbatim}
+svnadmin create /var/svn/simplepkg --fs-type fsfs
+\end{verbatim}
+
+Com o repositório criado, basta importar seus templates com o comando
+
+\begin{verbatim}
+templatepkg -e file:///var/svn/simplepkg
+\end{verbatim}
+
+A partir daí, o comando jail-commit enviará automaticamente todas as alterações dos templates para o repositório subversion. Se, por outro lado, você quiser baixar as alterações dos templates que estão no repositório remoto para sua cópia local, use o comando
+
+\begin{verbatim}
+templatepkg -s
+\end{verbatim}
+
+Caso você queira importar uma pasta de templates de um repositório já existente, use
+
+\begin{verbatim}
+templatepkg -i file:///var/svn/simplepkg
+\end{verbatim}
+
+onde file:///var/svn/simplepkg é o camninho do repositório.
+
+\section{Atualização de jaulas}
+
+A atualização de jaulas e sistemas instalados é feita através do \htmladdnormallink{simplaret}{http://slack.fluxo.info/simplaret} e também utiliza o arquivo /etc/simplepkg/jailist. Para mais informações a respeito, consulte a \htmladdnormallink{documentação do simplaret}{http://slack.fluxo.info/simplaret} para mais detalhes.
+
+\section{Arquiteturas e versões diferentes}
+
+O \emph{simplepkg} foi idealizado para permitir que um mesmo template possa ser usado para criar jaulas de arquiteturas e versões diferentes de sistemas padrão slackware. A atualização desses sistemas também é unificada. Essa possibilidade só é permitida se você usa o \htmladdnormallink{simplaret}{http://slack.fluxo.info/simplaret} e não o swaret como ferramenta de obtenção de pacotes.
+
+Por exemplo, para criar uma instalação de slackware 10.1 (assumindo que suas definições de repositórios do /etc/simplepkg/repos.conf contenham locais com slack 10.1), basta usar o comando
+
+\begin{verbatim}
+VERSION=10.1 mkjail minha-jaula template-servidor
+\end{verbatim}
+
+Arquiteturas diferentes também podem ser usadas. Se você está num sistema x86\_64 e quer instalar um slack 10.2 numa partição, experimente
+
+\begin{verbatim}
+ARCH=i386 VERSION=10.2 ROOT=/mnt mkjail hda2 meu-slackware
+\end{verbatim}
+
+Note que os templates independem de arquitetura e versão, já que eles só contém nomes de pacotes, arquivos de configuração e scripts.
+
+\section{Criando um pacote de um template}
+
+Se, por algum motivo, você quiser construir um pacote com o conteúdo de um template, experimente o comando
+
+\begin{verbatim}
+templatepkg -p nome-do-template
+\end{verbatim}
+
+No entanto, o \emph{simplepkg} foi criado para que esse tipo de comportamento seja evitado, já que é mais simples manter templates de configuração do que pacotes contendo a configuração de uma instalação.
+
+\section{Construindo pacotes}
+
+Até aqui, apenas mostramos os aplicativos do \emph{simplepkg} usados para a manutenção de instalações de slackware. No entanto, uma das outras finalidades desta suíte é a construção de pacotes, o que é feita pelo programa createpkg, Como dito anteriormente, o createpkg: baixa, compila e empacota software de acordo com scripts presentes num repositório de scripts, funcionando com um gerenciador de "ports" para slackware.
+
+O createpkg pode funcionar com qualquer tipo de script de construção de pacotes (SlackBuilds) mas funcionará melhor se os mesmos seguirem o padrão descrito na página
+
+\begin{verbatim}
+http://slack.fluxo.info/trac/wiki/SlackBuilds
+\end{verbatim}
+
+Especificamente, o createpkg foi desenvolvido para utilizar os slackbuild disponíveis em \htmladdnormallink{http://slack.fluxo.info/slackbuilds}{http://slack.fluxo.info/slackbuilds}. O createpkg trabalha com repositórios do tipo subversion.
+
+Para obter os scripts do repositório do slack.fluxo.info, digite
+
+\begin{verbatim}
+createpkg --sync
+\end{verbatim}
+
+Em seguida, você pode listas todos os scripts disponíveis:
+
+\begin{verbatim}
+createpkg --list
+\end{verbatim}
+
+Para buscar por um pacote, use
+
+\begin{verbatim}
+createpkg --search latex2html
+\end{verbatim}
+
+No caso, a busca é feita pelo SlackBuild do aplicativo "latex2html". Suponha agora que você queira construir o pacote desse aplicativo:
+
+\begin{verbatim}
+createpkg latex2html
+\end{verbatim}
+
+O pacote resultante estará na pasta /tmp ou no valor especificado pela variável de ambiente \emph{\$REPOS}. Para criar e também instalar o pacote, basta
+
+\begin{verbatim}
+createpkg --install latex2html
+\end{verbatim}
+
+Se o pacote possuir dependências listadas num arquivo slack-required e que não estiverem instaladas no sistema, o createpkg tentará processá-las uma a uma antes de tentar construir o pacote desejado: se as dependências não forem encontradas no repositório de scripts, então o createpkg tentará baixá-las de um repositório binário através do \htmladdnormallink{simplaret}{http://slack.fluxo.info/simplaret}. Se você não quiser que a resolução de dependências seja seguida, use a opção --no-deps.
+
+Para mais detalhes de funcionamento, experimente o comando
+
+\begin{verbatim}
+createpkg --help
+\end{verbatim}
+
+ou então acesse a página http://slack.fluxo.info/trac/wiki/SlackBuilds
+
+\section{Aplicativos auxiliares}
+
+O \emph{simplepkg} acompanha ainda alguns aplicativos auxiliares:
+
+\begin{itemize}
+   \item lspkg: lista pacotes instalados
+   \item rebuildpkg: reconstrói um pacote a partir de sua entrada no /var/log/packages
+   \item repos: cria e mantém repositórios
+   \item mkbuild: cria scripts de construção de pacotes
+\end{itemize}
+
+O comando lspkg é um utilitário simples para a visualização de pacotes instalados no sistema. Já o rebuildpkg ajuda a recuperar pacotes instalados cujo tgz original foi perdido. O comando rebuildpkg reconstrói um pacote a partir de uma entrada no /var/log/packages. O comando
+
+\begin{verbatim}
+rebuildpkg coreutils
+\end{verbatim}
+
+reconstrói um pacote do coreutils usando os arquivos e as metainformações listadas no arquivo do /var/log/packages/ correspondente ao coreutils.
+
+Por fim, os scripts repos e mkbuild são os que se encontram na etapa de maior desenvolvimento: repos cria um repositório de pacotes a partir de uma pasta contendo pacotes do tipo pkgtool e o mkbuild é um aplicativo para auxiliar a criação de scripts de construção de pacotes que podem ser utilizados sozinhos ou pelo o createpkg.
+
+\section{Parâmetros de configuração}
+
+O arquivo de configuração do \emph{simplepkg} é o /etc/simplepkg/simplepkg.conf. Ele contém parâmetros de configuração de todos os scripts, porém neste texto não trataremos das opções específicas ao \htmladdnormallink{simplaret}{http://slack.fluxo.info/simplaret}, as quais tem uma seção específica no artigo correspondente.
+
+Se você quiser alterar algum parâmetro, não edite esse arquivo: use, ao invés dele, o arquivo /etc/simplepkg/simplepkg.conf, pois este sobrescreve qualquer opção padrão.
+
+\begin{itemize}
+  \item \emph{JAIL\_ROOT}: pasta padrão onde as jaulas são criadas pelo mkjail. Valor padrão: "/vservers".
+  \item \emph{ADD\_TO\_JAIL\_LIST}: controla se uma jaula criada pelo mkjail deve ser adicionada automaticamente no arquivo /etc/simplepkg/jailist. O valor padrão é "1" (habilitado).
+  \item \emph{TEMPLATES\_UNDER\_SVN}: indica se os templates estão armazenados num repositório subversion.  O valor padrão é "no" (não).
+  \item \emph{TEMPLATE\_FOLDER}: indica qual é a pasta de templates. O valor padrão é "/etc/simplepkg/templates" e não é recomendável alterá-lo.
+  \item \emph{TEMPLATE\_STORAGE\_STYLE}: controla a forma de armazenamento de templates. O valor padrão é "own-folder" e essa opção apenas deve ser modificada se você armazena seus templates num formato antigo do \emph{simplepkg} e deseja manter compatibilidade.
+\end{itemize}
+
+Vale lembrar que todas as opções booleanas (isto é, que podem ser apenas habilitadas ou desabilitadas) do simplepkg.conf tem os seguintes valores permitidos: "1" e "yes" para habilitado e "0" ou "no" para desabilitado.
+
+\section{Mais informações}
+
+O \emph{simplepkg} foi escrito por Silvio Rhatto (rhatto at riseup.net) sob licença GPL e seu código fonte é disponibilizado através do repositório subversion:
+
+\begin{verbatim}
+svn checkout http://slack.fluxo.info/simplepkg
+\end{verbatim}
+
+O wiki de desenvolvimento está em http://slack.fluxo.info/trac/wiki/Simplepkg e o endereço da lista de discussão utilizada para discussões sobre o \emph{simplepkg} ou mesmo distribuições e pacotes do tipo Slackware é http://listas.fluxo.org/wws/info/slack.
+
+\end{document}

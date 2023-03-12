@@ -1,0 +1,987 @@
+#!/bin/bash
+#
+# templatepkg: template maintenance script from simplepkg suite
+# feedback: rhatto at riseup.net | gpl
+# 
+#  Templatepkg is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  Templatepkg is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+# $Rev$ - $Author$
+#
+
+COMMON="/usr/libexec/simplepkg/common.sh"
+BASENAME="`basename $0`"
+
+if [ -f "$COMMON" ]; then
+  source $COMMON
+  eval_config $BASENAME
+else
+  echo "error: file $COMMON found, check your $BASENAME installation"
+  exit 1
+fi
+
+function usage_summary {
+
+  echo "options are:"
+  echo ""
+  echo "  -c | --create: create a template from a jail or existing template"
+  echo "  -u | --update: update a template from a jail"
+  echo "  -a | --add: add files into a template"
+  echo "  -d | --delete: delete files or folders from a template"
+  echo "  -s | --sync: sync $TEMPLATE_FOLDER working copy"
+  echo "  -e | --export: export $TEMPLATE_FOLDER to a svn repository"
+  echo "  -i | --import: grab $TEMPLATE_FOLDER from a svn repository"   
+  echo "  -r | --remove: remove a template"
+  echo "  -l | --list: list templates"
+  echo "  -b | --batch-edit: add or edit post-installation scripts"
+  echo "  -p | --pack: create a package from a template"
+  echo "  -t | --template-edit: edit template package list"
+  echo "  -h | --help: display this summary"   
+  echo ""   
+
+}
+
+function display_help {
+
+  # display help
+  # usage: help [help-topic]
+
+  local option
+
+  if [ -z "$1" ]; then
+    echo "type $BASENAME --help <option> for aditional help"
+    usage_summary
+    exit
+  fi
+
+  option="$1"
+
+  if ! echo $option | grep -q -e "^-"; then
+    option="-`echo $option | sed -e 's/--/-/' -e 's/\(.\).*/\1/'`"
+  else
+    option="`echo $option | sed -e 's/--/-/' -e 's/\(..\).*/\1/'`"
+  fi
+
+  echo "$BASENAME: help for option $option:"
+  echo ""
+
+  usage_summary | grep -e "^  $option"
+
+  echo ""
+  case $option in
+
+    "-c" | "--create")
+      echo "      $BASENAME $option <template> [jail-root|template-name]"
+      ;;
+    "-u" | "--update")
+      echo "      $BASENAME $option <template> [jail-root]"
+      ;;
+    "-a" | "--add")
+      echo "      $BASENAME $option <template> <file-name> [jail-root]"
+      echo ""
+      echo "      file-name: the file or directory to be added"
+      echo "      jail-root: the jail under file-name is located"
+      ;;
+    "-d" | "--delete")
+      echo "      $BASENAME $option <template> <file-name> [jail-root]"
+      echo ""
+      echo "      file-name: the file or directory to be removed"
+      echo "      jail-root: if specified, the file is also removed from the jail"
+      ;;
+    "-s" | "--sync")
+      echo "      $BASENAME $option"
+      ;;
+    "-e" | "--export")
+      echo "      $BASENAME $option <svn-repository>"
+      ;;
+    "-i" | "--import")
+      echo "      $BASENAME $option <svn-repository>"
+      ;;
+    "-r" | "--remove")
+      echo "      $BASENAME $option <template-name>"
+      ;;
+    "-l" | "--list")
+      echo "      $BASENAME $option [path]"
+      ;;
+    "-b" | "--batch-edit")
+      echo "      $BASENAME $option <template-name> <script-name>"
+      ;;
+    "-p" | "--pack")
+      echo "      $BASENAME $option <template-name> [version] [build] [arch]"
+      ;;
+    "-t" | "--template-edit")
+      echo "      $BASENAME $option <template-name>"
+      ;;
+    "-h" | "--help")
+      echo "  -h | --help: display this help."   
+      ;;
+    *)
+      echo $BASENAME: invalid help option $option
+  esac
+
+  case $option in
+    "-c" | "-u" | "-a")
+      echo ""
+      echo "  if ommited, jail-root defaults to /"
+      ;;
+  esac
+
+  echo ""
+
+}
+
+function usage {
+
+  echo "usage: $BASENAME <option> [<template> [arguments]]"
+  usage_summary
+  exit
+
+}
+
+function import_export_templates {
+
+  # import from or export to $TEMPLATE_FOLDER in a svn repository
+  # usage: template_export <import|export> <repository>
+
+  local templates templates_folder basedir repository mode preposition
+  local repository_type repository_path
+
+  if [ "$?" != 0 ]; then
+    usage
+    exit 1
+  elif ! templates_under_svn; then
+    echo $BASENAME: simplepkg not configured to use svn
+    exit 1
+  fi
+
+  templates_folder="$TEMPLATE_FOLDER"
+  templates="`basename $TEMPLATE_FOLDER`"
+  basedir="`dirname $templates_folder`"
+  mode="$1"
+  repository="$2"
+  preposition="from"
+
+  valid_svn_repo $repository
+
+  if [ ! -z "$2" ]; then
+
+    if ! svn_folder $templates_folder; then
+
+      cd $basedir
+
+      if [ "$mode" == "export" ]; then
+        preposition="to"
+        check_and_create_svn_repo $repository
+        echo Exporting templates to $repository...
+        svn import $templates/ $repository/ -m "initial import"
+        if [ "$?" != "0" ]; then
+          echo $BASENAME: export failed
+          exit 1
+        fi
+      fi
+
+      if [ -d "templates" ]; then
+        mv $templates $templates.old
+      fi
+
+      echo Checking out templates from $repository...
+      svn checkout $repository $templates
+
+      if [ "$?" == "0" ]; then
+        rm -rf $templates.old
+      else
+        rm -rf $templates
+        mv $templates.old $templates
+        echo $BASENAME: $mode failed
+        exit 1
+      fi
+
+    else
+      echo "$BASENAME: $templates_folder seens to be already $mode""ed $preposition $repository"
+      exit 1
+    fi
+
+  fi
+
+}
+
+function template_create {
+
+  # create a new template
+
+  local template_base info_commit orig_template list
+  local orig_packages orig_perms orig_scripts orig_files
+
+  if [ ! -d "`dirname $TEMPLATE_BASE`" ]; then
+
+    echo Creating template `basename $TEMPLATE_BASE`...
+
+    if templates_under_svn && svn_folder `dirname $TEMPLATE_BASE`; then
+      cd `dirname $TEMPLATE_BASE`
+      svn mkdir `dirname $TEMPLATE_BASE`
+    else
+      mkdir -p `dirname $TEMPLATE_BASE`
+    fi
+
+  else
+    echo $BASENAME: template `basename $TEMPLATE_BASE` already exists
+    exit 1
+  fi
+
+  touch `template_perms`
+  touch `template_packages`
+
+  if templates_under_svn && svn_folder `dirname $TEMPLATE_BASE`; then
+
+    cd `dirname $TEMPLATE_BASE`
+
+    if ! svn_check `template_files`; then
+      svn mkdir `template_files`
+      info_commit="yes"
+    else
+      mkdir -p `template_files`
+    fi
+
+    if ! svn_check `template_scripts`; then
+      svn mkdir `template_scripts`
+      info_commit="yes"
+    else
+      mkdir -p `template_scripts`
+    fi
+
+    if ! svn_check `template_packages`; then
+      svn add `template_packages`
+      info_commit="yes"
+    fi
+
+    if ! svn_check `template_perms`; then
+      svn add `template_perms`
+      info_commit="yes"
+    fi
+
+  elif templates_under_svn && svn_folder "$TEMPLATE_FOLDER"; then
+
+    mkdir `template_files` `template_scripts`
+    cd $TEMPLATE_FOLDER
+    svn add `basename $TEMPLATE_BASE`
+    info_commit="yes"
+
+  else
+    mkdir `template_files` `template_scripts`
+  fi
+
+  if [ -d "/$ROOT" ]; then
+    template_update
+  elif [ ! -z "$ROOT" ]; then
+
+    # copy from an existing template
+
+    if [ -d "$TEMPLATE_FOLDER/$ROOT" ]; then
+      orig_template="$TEMPLATE_FOLDER/$ROOT"
+    elif [ -d "$BASE_CONF/templates/$ROOT" ]; then
+      orig_template="$BASE_CONF/templates/$ROOT"
+    elif [ -d "$BASE_CONF/defaults/templates/$ROOT" ]; then
+      orig_template="$BASE_CONF/defaults/templates/$ROOT"
+    else
+      return 1
+    fi
+
+    if [ -e "$orig_template/$ROOT/packages" ]; then
+      orig_packages="$orig_template/$ROOT/packages"
+      orig_perms="$orig_template/$ROOT/perms"
+      orig_scripts="$orig_template/$ROOT/scripts"
+      orig_files="$orig_template/$ROOT/files"
+    else
+      orig_packages="$orig_template/$ROOT.template"
+      orig_perms="$orig_template/$ROOT.perms"
+      orig_scripts="$orig_template/$ROOT.s"
+      orig_files="$orig_template/$ROOT.d"
+    fi
+
+    if [ -f "$orig_perms" ]; then
+      cat $orig_perms > `template_perms`
+    fi
+
+    if [ -f "$orig_packages" ]; then
+      cat $orig_packages > `template_packages`
+    fi
+      
+    if templates_under_svn && svn_folder $orig_template; then
+
+      cd `dirname $TEMPLATE_BASE`
+
+      list="`ls $orig_files/ 2> /dev/null`"
+      if [ ! -z "$list" ]; then
+        echo Copying files to the new template...
+        rsync -av --exclude=.svn $orig_files/ `template_files`/
+        svn add `basename $(template_files)`/*
+        info_commit="yes"
+      fi
+
+      list="`ls $orig_scripts/ 2> /dev/null`"
+      if [ ! -z "$list" ]; then
+        echo Copying scripts to the new template...
+        rsync -av --exclude=.svn $orig_scripts/ `template_scripts`/
+        svn add `basename $(template_scripts)`/*
+        info_commit="yes"
+      fi
+
+    else
+
+      list="`ls $orig_files/ 2> /dev/null`"
+      if [ ! -z "$list" ]; then
+        echo Copying files to the new template...
+        rsync -av $orig_files/ `template_files`/
+      fi
+
+      list="`ls $orig_scripts/ 2> /dev/null`"
+      if [ ! -z "$list" ]; then
+        echo Copying scripts to the new template...
+        rsync -av $orig_scripts/ `template_scripts`/
+      fi
+
+    fi
+
+  else
+    echo $BASENAME: warning: no root directory defined
+  fi
+
+  if [ "$info_commit" == "yes" ] && [ -z "$SILENT" ]; then
+    echo "Please run 'jail-commit --all' to add files under $file into the svn repository"
+  fi
+
+}
+
+function template_update {
+
+  # update the template package list
+
+  check_template_exist
+
+  if [ ! -d "$ROOT/var/log/packages" ]; then
+    echo $ROOT/var/log/packages: directory not found
+    exit 1
+  fi
+
+  echo Checking package list for template `basename $TEMPLATE_BASE`...
+
+  for package in `ls -1 $ROOT/var/log/packages/`; do
+    pack=`package_name $package`
+    if [ -f $TEMPLATE ]; then
+      if ! `grep -v -e "^#" $TEMPLATE | cut -d : -f 1 | awk '{ print $1 }' | grep -q -e "^$pack\$"`; then
+        echo $pack >> $TEMPLATE
+        echo Adding $pack # on $TEMPLATE
+      fi
+    else
+      echo $pack >> $TEMPLATE
+      echo Adding $pack # on $TEMPLATE
+    fi
+  done
+
+  # check if each package from the template is installed
+  grep -v -e "^#" $TEMPLATE | cut -d : -f 1 | awk '{ print $1 }' | while read pack; do
+
+    if [ ! -z "$pack" ]; then
+      unset found
+      for candidate in `ls $ROOT/var/log/packages/$pack* 2> /dev/null`; do
+        candidate="`package_name $candidate`"
+        if [ "$pack" == "$candidate" ]; then
+          found="1"
+          break
+        fi
+      done
+      if [ "$found" != "1" ]; then
+        # remove a non-installed package from the template
+        sed "/^$pack$/d" $TEMPLATE | sed "/^$pack $/d" | sed "/^$pack:*/d" | sed "/^$pack */d" > $TEMPLATE.tmp
+        cat $TEMPLATE.tmp > $TEMPLATE
+        rm -f $TEMPLATE.tmp
+        echo Removing $pack # from $TEMPLATE
+      fi
+    fi
+
+  done
+
+  if ! svn_check `template_packages` && svn_folder `dirname $TEMPLATE_BASE`; then
+    cd `dirname $TEMPLATE_BASE`
+    svn add `basedir $(template_packages)`
+  fi
+
+}
+
+function template_add {
+
+  # add a file in a template
+  # usage: template_add <jail-root> <file>
+
+  local info_commit cwd
+
+  if [ -z "$1" ] || [ -z "$2" ]; then
+    return 1
+  fi
+
+  check_template_exist
+
+  jail="/$1" 
+  file="$2"
+
+  if [ -a "`template_files`/$file" ]; then
+    if [ -d "`template_files`/$file" ]; then
+
+      echo $BASENAME: folder `slash $file` already on `template_files`, checking for contents
+
+      cd $jail
+      for candidate in `find $file`; do
+        if [ ! -a "`template_files`/$candidate" ]; then
+          mkdir -p `template_files`/`dirname $candidate`
+          cp -a $jail/$candidate `template_files`/$candidate
+          if templates_under_svn && svn_folder `template_files`; then
+            cwd="`pwd`"
+            cd `template_files`
+            svn add ./$candidate
+            if [ "$?" != "0" ]; then
+              echo $BASENAME: error adding `slash $candidate` into the revision system
+            fi
+            cd $cwd
+            info_commit="yes"
+          else
+            echo Added `slash $jail/$candidate` on `slash $(template_files)/$candidate`
+          fi
+        fi
+      done
+
+      if [ "$info_commit" == "yes" ] && [ -z "$SILENT" ]; then
+        echo "Please run 'jail-commit --all' to add files under `slash $file` into the svn repository"
+      fi
+
+    else
+      echo $BASENAME: file `slash $file` already on `template_files`
+      exit 1
+    fi
+  else
+
+    if [ -a "$jail/$file" ]; then
+
+      destination="`echo $(template_files)/$file | sed -e 's/\/$//'`"
+
+      if templates_under_svn && svn_folder `template_files`; then
+
+        candidate="./`dirname $file`"
+
+        if ! svn_folder `template_files`/$candidate; then
+          mkdir -p `template_files`/$candidate
+          cd `template_files`/`dirname $candidate`
+          while true; do
+            if svn_folder $(pwd); then
+              svn add `basename $candidate`
+              break
+            else
+              candidate="`basename $(pwd)`"
+              cd ..
+            fi
+          done
+        fi
+
+        cp -a $jail/$file $destination
+
+        cwd="`pwd`"
+        cd `template_files`
+        svn add ./$file
+
+        if [ "$?" != "0" ]; then
+          echo $BASENAME: error adding `slash $candidate` into the revision system
+        else
+          if [ -z "$SILENT" ]; then
+            echo "Please run 'jail-commit --all' to add `slash $file` into the svn repository"
+          fi
+        fi
+
+        cd $cwd
+
+      else
+
+        mkdir -p `template_files`/`dirname $file`/
+        cp -a $jail/$file $destination
+        echo Added `slash $jail/$file` on `slash $destination`
+
+      fi
+
+    else
+      echo $BASENAME: `slash $jail/$file`: file not found
+      exit 1
+    fi
+  fi
+
+}
+
+function check_template_exist {
+
+  # check if a template exists
+  # and create missing components
+
+  local components
+
+  components="`template_packages` `template_perms` `template_files` `template_scripts`"
+
+  if [ ! -d "`dirname $TEMPLATE_BASE`" ]; then
+    echo $BASENAME: template not found
+    exit 1
+  fi
+
+  for component in $components; do
+
+    if [ ! -e "$component" ]; then
+
+      echo "$BASENAME: template component not found: $component; creating..."
+
+      cd `dirname $TEMPLATE_BASE`
+
+      if [ "$component" == "perms" ] || [ "$component" == "template" ]; then
+        touch $component
+      else
+        mkdir $component
+      fi
+
+      if templates_under_svn && svn_folder `dirname $TEMPLATE_BASE`; then
+        svn add $component
+        info_commit="yes"
+      fi
+
+    elif templates_under_svn && svn_folder `dirname $TEMPLATE_BASE` && \
+         ! svn_check $component; then
+
+      cd `dirname $TEMPLATE_BASE`
+      svn add $component
+      info_commit="yes"
+
+    fi
+
+  done
+
+  if [ "$info_commit" == "yes" ] && [ -z "$SILENT" ]; then
+    echo "Please run 'jail-commit --all' to add new files in the svn repository"
+  fi  
+
+}
+
+function template_delete {
+
+  # delete a file from a template
+  # usage: template_delete <file> [jail-root]
+
+  if [ -e "`template_files`/$1" ]; then
+
+    # first try to remove the file from the template
+    if templates_under_svn && svn_folder `template_files`; then
+      cd `template_files`
+      svn del --force ./$1 || rm -rf ./$1
+      if [ -z "$SILENT" ]; then
+        echo "Please run 'jail-commit --all' to del $1 in the svn repository"
+      fi
+    else
+      rm -rf `template_files`/$1
+      echo Removed $1 from `template_files`
+    fi
+
+    # then, if requested, remove the file from the jail
+    if [ ! -z "$2" ]; then
+      if [ ! -d "$2" ]; then
+        echo $BASENAME: jail not found: $2
+      elif [ -e "$2/$1" ]; then
+        rm -rf $2/$1
+        echo Removed $1 from jail $2
+      else
+        echo $BASENAME: file not found: $2/$1
+      fi
+    fi
+
+  elif [ -e "`template_scripts`/$1" ]; then
+    if templates_under_svn && svn_folder `template_scripts`; then
+      cd `template_scripts`
+      svn del --force ./$1 || rm -rf ./$1
+      if [ -z "$SILENT" ]; then
+        echo "Please run 'jail-commit --all' to del $1 in the svn repository"
+      fi
+    else
+      rm -rf `template_scripts`/$1
+      echo Removed $1 from `template_scripts`
+    fi
+  else
+    if [ ! -d "`template_files`" ]; then
+      echo $BASENAME: template folder `template_files` not found
+    else
+      echo $BASENAME: file $1 not found at `template_files`
+    fi
+    exit 1
+  fi
+
+}
+
+function template_remove {
+
+  # remove a template
+  # usage: template_remove
+
+  local basedir template
+
+  basedir="`dirname $TEMPLATE_BASE`"
+  template="`basename $basedir`"
+
+  if [ ! -d "$basedir" ]; then
+    echo $BASENAME: template $template does not exist
+    exit 1
+  fi
+
+  if templates_under_svn && svn_folder $basedir; then
+    cd $TEMPLATE_FOLDER
+    svn update
+    svn del --force $template
+    if [ "$?" != "0" ]; then
+      echo $BASENAME: error deleting template $template
+    else
+      svn commit -m "deleted $template"
+      if [ "$?" != "0" ]; then
+        echo $BASENAME: error commiting to svn repository
+      fi
+    fi
+  else
+    rm -rf $basedir
+  fi
+
+}
+
+function template_list {
+
+  # list templates
+  # usage: template_list [path]
+
+  local list basedir template
+
+  if [ "$TEMPLATE_STORAGE_STYLE" != "own-folder" ] && \
+     [ "$TEMPLATE_STORAGE_STYLE" != "compact" ]; then
+    echo "$BASENAME: option only available if TEMPLATE_STORAGE_STYLE configured as 'own-folder' or 'compact'"
+    return 1
+  fi
+
+  if echo $1 | grep -q "/" || [ ! -z "$1" ]; then
+
+    template="`echo $1 | cut -d "/" -f 1`"
+
+    if [ -e "$BASE_CONF/defaults/templates/$1" ]; then
+      list="`ls $BASE_CONF/defaults/templates/$1 2> /dev/null`"
+      if [ "$?" == "0" ]; then
+        list="`echo $list | xargs`"
+        echo "In the default template $template: $list"
+      fi
+    fi
+
+    if [ -e "$TEMPLATE_FOLDER/$1" ]; then
+      list="`ls $TEMPLATE_FOLDER/$1 2> /dev/null`"
+      if [ "$?" == "0" ]; then
+        list="`echo $list | xargs`"
+        echo "In the custom template $template: $list"
+      fi      
+    fi
+
+  else
+
+    list="`ls $BASE_CONF/defaults/templates/$1 2> /dev/null`"
+    if [ "$?" == "0" ]; then
+      list="`echo $list | xargs`"
+      echo "Default templates: $list"
+    fi
+
+    list="`ls $TEMPLATE_FOLDER/$1 2> /dev/null`"
+    if [ "$?" == "0" ]; then
+      list="`echo $list | xargs`"
+      echo "Custom templates: $list"
+    fi
+
+  fi
+
+}
+
+function template_post_install_edit {
+
+  # add or edit a post-installation script
+  # usage: template_post_install_edit <script-name>
+
+  if [ -z "$1" ]; then
+    echo $BASENAME: no template specified
+    exit 1
+  elif echo $1 | grep -q "/"; then
+    echo $BASENAME: error: invalid script name $1
+  fi
+
+  if [ -f "`template_scripts`/$1" ]; then
+    sha1sum="`sha1sum $(template_scripts)/$1`"
+    if [ ! -z "$EDITOR" ]; then
+      $EDITOR `template_scripts`/$1
+    else
+      vi `template_scripts`/$1
+    fi
+    if [ "$sha1sum" != "`sha1sum $(template_scripts)/$1`" ] && \
+       svn_folder `dirname $TEMPLATE_BASE` && [ -z "$SILENT" ]; then
+      echo "Please run 'jail-commit --all' to send changes to the repository"
+    fi    
+  else
+
+    if [ -e "`template_scripts`/$1" ]; then
+
+      echo $BASENAME: file `template_scripts`/$1 not a regular file
+
+    elif [ -d "`template_scripts`" ]; then
+
+      touch `template_scripts`/$1
+      chmod +x `template_scripts`/$1
+
+      if svn_folder `template_scripts`; then
+        cd `template_scripts`
+        svn add $1
+        if [ -z "$SILENT" ]; then
+          echo "Please run 'jail-commit --all' to send the script to the repository"
+        fi
+      fi
+
+      echo "$BASENAME: script created; run templatepkg -p `basename $TEMPLATE_BASE` $1 again to edit it"
+
+    else
+      echo $BASENAME: folder not found: `template_scripts`
+    fi
+
+  fi
+
+}
+
+function template_edit {
+
+  # edit a template package list
+  # usage: template_edit
+
+  if [ -f "`template_packages`" ]; then
+    sha1sum="`sha1sum $(template_packages)`"
+    if [ ! -z "$EDITOR" ]; then
+      $EDITOR `template_packages`
+    else
+      vi `template_packages`
+    fi
+    if [ "$sha1sum" != "`sha1sum $(template_packages)`" ] && \
+       svn_folder `dirname $TEMPLATE_BASE` && [ -z "$SILENT" ]; then
+      echo "Please run 'jail-commit --all' to send changes to the repository"
+    fi
+  elif [ -e "`template_packages`" ]; then
+    echo $BASENAME: file `template_packages` not a regular file
+  else
+    echo $BASENAME: file not found: `template_packages`
+  fi
+
+}
+
+function require {
+
+  # requires a string
+  # usage: require [string]
+
+  if [ -z "$1" ]; then
+    usage
+  fi
+
+}
+
+function setroot {
+
+  # set ROOT variable
+  # usage: setroot <value1> <value2>
+  
+  if [ -z "$1" ]; then
+    ROOT="/"
+  else
+    ROOT="$1"
+  fi
+
+}
+
+function create_doinst {
+
+  # create a doinst.sh from a template perms file
+  # usage: create_doinst <doinst-path>
+
+  rm -f $1/doinst.sh
+
+  if [ -s "`template_perms`" ]; then
+    echo Creating doinst.sh...
+    cat `template_perms` | while read entry; do
+      file="`echo $entry | cut -d ";" -f 1`"
+      if [ -e "`template_files`/$file" ]; then
+        owner="`echo $entry | cut -d ";" -f 2`"
+        group="`echo $entry | cut -d ";" -f 3`"
+        perms="`echo $entry | cut -d ";" -f 4`"
+        echo "( chmod $perms /$file )" >> $1/doinst.sh
+        echo "( chown $owner:$group /$file )" >> $1/doinst.sh
+      fi
+    done
+  fi
+
+}
+
+function package_template {
+
+  # make a package from a template
+  # usage: package_template [version] [build] [arch]
+
+  local template version build arch
+
+  template="`basename $TEMPLATE_BASE`"
+
+  if [ ! -d "`template_files`" ]; then
+    $BASENAME: folder not found: `template_files`
+    return 1
+  fi
+
+  echo Buiding package for template $template...
+
+  if [ -z "$1" ]; then
+    version="1"
+  else
+    version="$1"
+  fi
+
+  if [ -z "$2" ]; then
+    build="1"
+  else
+    build="$2"
+  fi
+
+  if [ -z "$3" ]; then
+    arch="noarch"
+  else
+    arch="$3"
+  fi
+
+  TMP=${TMP:=/tmp}
+  rm -rf $TMP/templatepkg
+  mkdir -p $TMP/templatepkg
+
+  rsync -av --exclude=.svn `template_files`/ $TMP/templatepkg/
+  mkdir $TMP/templatepkg/install
+  create_doinst $TMP/templatepkg/install
+
+  echo "template-$template: template-$template" > $TMP/templatepkg/install/slack-desc
+  echo "template-$template: " >> $TMP/templatepkg/install/slack-desc
+  echo "template-$template: simplepkg template $template" >> $TMP/templatepkg/install/slack-desc
+
+  for ((n=1;n<=8;n++)); do
+    echo "template-$template: " >> $TMP/templatepkg/install/slack-desc
+  done
+
+  cd $TMP/templatepkg
+
+  makepkg -c n -l y $TMP/template-$template-$version-noarch-$build.$MKBUILD_COMPRESS
+
+  cd $TMP
+  rm -rf templatepkg
+
+}
+
+# -----------------------------------------------------
+#                       main
+# -----------------------------------------------------
+
+if [ ! -z "$2" ]; then
+  search_template $2 --new
+fi
+
+TEMPLATE="`template_packages`"
+
+if [ "$1" == "-u" ] || [ "$1" == "--update" ]; then
+
+  require $2
+  setroot $3
+  template_update
+
+elif [ "$1" == "-c" ] || [ "$1" == "--create" ]; then
+
+  require $2
+  setroot $3
+  template_create
+
+elif [ "$1" == "-a" ] || [ "$1" == "--add" ]; then
+
+  require $2
+
+  if [ -z "$3" ]; then
+    usage
+  else
+    setroot $4
+  fi
+
+  template_add $ROOT $3
+
+elif [ "$1" == "-d" ] || [ "$1" == "--delete" ]; then
+
+  require $2
+
+  if [ -z "$3" ]; then
+    usage
+  else
+    template_delete $3 $4
+  fi
+
+elif [ "$1" == "-s" ] || [ "$1" == "--sync" ]; then
+
+  if templates_under_svn && svn_folder $TEMPLATE_FOLDER; then
+    ( cd $TEMPLATE_FOLDER && svn update )
+    true
+  fi
+
+elif [ "$1" == "-e" ] || [ "$1" == "--export" ]; then
+ 
+  require $2 
+  import_export_templates export $2
+
+elif [ "$1" == "-i" ] || [ "$1" == "--import" ]; then
+
+  require $2
+  import_export_templates import $2
+
+elif [ "$1" == "-r" ] || [ "$1" == "--remove" ]; then
+
+  require $2
+  template_remove
+
+elif [ "$1" == "-l" ] || [ "$1" == "--list" ]; then
+
+  template_list $2
+
+elif [ "$1" == "-b" ] || [ "$1" == "--batch-edit" ]; then
+
+  require $3
+  template_post_install_edit $3
+
+elif [ "$1" == "-t" ] || [ "$1" == "--template-edit" ]; then
+
+  require $2
+  template_edit
+
+elif [ "$1" == "-p" ] || [ "$1" == "--pack" ]; then
+
+  require $2
+  shift ; shift
+  package_template $*
+
+elif [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
+
+  display_help $2 
+
+else
+  usage
+fi
+

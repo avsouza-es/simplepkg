@@ -1,0 +1,145 @@
+#!/bin/bash
+#
+# MKPatch 2.0.0: Simple patch program to .mkbuild models
+# feedback: rudsonaalves at yahoo.com.br | gpl
+#
+#  mkbuild is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  mkbuild is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+# Input:
+#   - $1 Diff_File
+#   - #2 Source_File
+#
+# Version:
+PROG_VERSION=2.0
+BASENAME=`basename $0`
+
+# Errors codes. From common.sh
+ERROR_FILE_NOTFOUND=${ERROR_FILE_NOTFOUND:=100}
+ERROR_PAR_NUMBER=${ERROR_PAR_NUMBER:=102}
+ERROR_MKPATCH=${ERROR_MKPATCH:=600}
+
+# check input arguments
+if [ "$1" = "--help" -o "$1" = "-h" ]; then
+    echo "Use: $BASENAME <diff_file> <source_file>"
+    exit $ERROR_HELP
+fi
+
+# check number of parameters
+[ $# -ne 2 ] && exit $ERROR_PAR_NUMBER
+
+# check diff_file exit
+[ ! -e $1 ] && exit $ERROR_FILE_NOTFOUND
+
+# check source_file exit
+[ ! -e $2 ] && exit $ERROR_FILE_NOTFOUND
+
+# Change IFS value to <ENTER> only
+OLD_IFS=$IFS
+IFS='
+'
+
+# Read vector from patch file
+index=0
+while read line; do
+    Diff_lines[index]="`echo $line | cut -c2-`"
+    Diff_action[index]="`echo $line | cut -c1`"
+    let index++
+done < $1
+let Diff_n_lines=index-1
+
+# Read vector from source file
+index=0
+while read line; do
+    Source_lines[index]="$line"
+    let index++
+done < $2
+let Source_n_lines=index-1
+
+# Rescue IFS value
+IFS=$OLD_IFS
+
+# Stating variables
+Source_index=0
+Diff_index=0
+Diff_pointer=0
+Status_diff=0
+
+# Output vector
+Output=""
+Output_index=0
+
+# Apply patch
+while [ $Source_index -le $Source_n_lines -a $Diff_index -le $Diff_n_lines ]; do
+    # make Actions
+    case "${Diff_action[Diff_index]}" in
+        '-')
+            if [ "${Source_lines[Source_index]}" == "${Diff_lines[Diff_index]}" ]; then
+                Status_diff=1
+                let Diff_index++
+            else
+                Diff_index=$Diff_pointer
+                Status_diff=0
+                Output[Output_index]="${Source_lines[Souce_index]}"
+                let Output_index++
+            fi
+            let Source_index++
+            ;;
+        '+')
+            Output[Output_index]="${Diff_lines[Diff_index]}"
+            let Diff_index++
+            let Output_index++
+            ;;
+        ' ')
+            if [ "${Source_lines[Source_index]}" == "${Diff_lines[Diff_index]}" ]; then
+                Status_diff=1
+                let Diff_index++
+            else
+                Status_diff=0
+                Diff_index=$Diff_pointer
+            fi
+            Output[Output_index]="${Source_lines[Source_index]}"
+            let Output_index++
+            let Source_index++
+            ;;
+        '=')
+            let Diff_index++
+            Status_diff=0
+            Diff_pointer=$Diff_index
+            ;;
+        '*')
+            echo "Invalid diff action."
+            exit $ERROR_MKPATCH
+            ;;
+    esac
+done
+
+# Check end of file mkSlackBuild
+if [ $Diff_index -gt $Diff_n_lines -a $Source_index -le $Source_n_lines ]; then
+    # write the rest of mkSlackBuild in Output vector
+    for index in `seq $Source_index $Source_n_lines`; do
+        Output[Output_index]="${Source_lines[index]}"
+        let Output_index++
+    done
+elif [ $Diff_index -le $Diff_n_lines ]; then
+    # Write others addlines, "+", in Output vector
+    while [ "${Diff_Action[Diff_index]}" == "+" ]; do
+        Output[Output_index]="${Diff_lines[Diff_index]}"
+        let Diff_index++
+        let Output_index++
+    done
+fi
+
+# Print Output file
+for index in `seq 1 $Output_index`; do
+    echo "${Output[$index-1]}"
+done

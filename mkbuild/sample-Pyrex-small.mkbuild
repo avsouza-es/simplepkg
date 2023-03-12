@@ -1,0 +1,65 @@
+#
+#  This mkbuild is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  This mkbuild is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+
+#--------------------
+# Personal variables
+#--------------------
+# Author name
+[[SLACKBUILD AUTHOR]]="Adalberto Simão Nader"
+
+#
+# Complete URL address or URL base address ( without $SRC_NAME-$VERSION... )
+[[DOWNLOAD FOLDER URL]]="http://www.cosc.canterbury.ac.nz/greg.ewing/python/Pyrex/Pyrex-0.9.5.1a.tar.gz"
+
+#
+# Default sections:
+#      head, set_variables, slkflags, start_structure, untar_source,
+#      make_package, install_package, build_package
+# Warning: don't remove '#>>' and "#<<" tags.
+#>> Start SlackBuild Sections:
+ on: head
+ on: slackbuildrc
+ on: set_variables
+ on: slkflags
+ on: error_codes
+ on: start_structure
+ on: download_source
+ on: md5sum_download_and_check_0
+ on: untar_source
+ on: configure
+ on: make_package
+ on: install_package
+ on: strip_binaries
+ on: install_documentation
+ on: slackdesc
+ on: build_package
+ on: clean_builds
+#<< End SlackBuild Sections
+
+#------------------
+# Sections changes
+#------------------
+#>slackdesc
+pyrex: Pyrex by Slack.Sarava
+pyrex:
+pyrex: Pyrex is a language specially designed for writing Python extension
+pyrex: modules. Its designed to bridge the gap between the nice, high-level,
+pyrex: easy-to-use world of Python and the messy, low-level world of C.
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+#<slackdesc

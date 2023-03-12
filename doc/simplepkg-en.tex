@@ -1,0 +1,390 @@
+\documentclass{article}
+\usepackage[brazilian]{babel}
+\usepackage[latin1]{inputenc}
+\usepackage[dvips]{graphics}
+\usepackage{hyperref}
+\usepackage{html,makeid}
+
+\title{Simplepkg: installation manager and packaging system}
+\author{Silvio Rhatto}
+
+\begin{document}\label{start}
+\maketitle
+
+\begin{abstract}
+Simplepkg is a non-intrusive management system running on top of pkgtool made of a set of scripts which helps the sysadmin and developing cycles of an slackware system.  It can be used to create packages and repositories as long as the operational system installation and config file change tracking. Portuguese documentation \htmladdnormallink{here}{/simplepkg}.
+\end{abstract}
+
+\section{Description}
+
+All GNU/Linux distributions comes with a well developed packaging system. The question now is how pratical is the way to install, configure and control any changes in a system.
+
+As an example, suppose you should keep a list of about 200 slackware machines, some of them used as desktops, others as mail or webservers. If you lost some hardrives or usually need to re-install or update some of those boxes.
+
+Using the slackware installation cd and configuring by hand all the time you got a crash is a time loss activity and you'll never know if something remained missconfigured. An alternative is to keep a complete backup of a machine or some parts of the tree, but for a large number of different boxes this procedure costs a lots of resources.
+
+Simplepkg offers an alternative sollution for this and other problems related to installation management, allowing you to keep templates of each machine and install a custom slackware system with just one or a few commands. Creating and upgrading chroot and vservers is easy with simplepkg.
+
+Package and installation management is not everything simplepkg can do. It can also be used to create vservers, create packages and store system configuration files in a subversion repository.
+
+Simplepkg works with any (official or not) slackware port that follows the minimum system guidelines.
+
+\section{Architecture}
+
+Simplepkg is a set of scripts wrote in the KISS philosophy. Its a pretty simple system, composed by the following commands:
+
+\begin{itemize}
+   \item mkjail: build a slackware jail/installation in a folder
+   \item templatepkg: create or update a package list of an installation template
+   \item lspkg: show installed packages and its contents
+   \item jail-commit: update all configuration files of a template
+   \item jail-update: jail-commit counterpart
+   \item rebuildpkg: rebuild a package based on its /var/log/packages entry
+   \item simplaret: package retrieval tool
+   \item createpkg: donwload, compile and package creation script
+   \item repos: creates and manages binary repositories
+   \item mkbuild: app to build slackware build scripts
+\end{itemize}
+
+\section{Installation}
+
+The latest version of simplepkg is locate at \htmladdnormallink{http://slack.fluxo.info/packages/noarch/}{http://slack.fluxo.info/packages/noarch/}. Install it with the usual way:
+
+\begin{verbatim}
+installpkg simplepkg-VERSION-noarch-BUILD.tgz
+\end{verbatim}
+
+\section{Simplepkg usage}
+
+The three main simplepkg uses are:
+
+\begin{itemize}
+  \item Package managemen
+  \item Jail/installation creation and management
+  \item Package creation
+\end{itemize}
+
+Package management is made with simplaret app, whose behaviour is detailed in its own document.  The following sections will only show how simplepkg can be used to manage jails and template and create packages.
+
+\section{Creating templates}
+
+Initially, simplepkg was built to help slackware install automation. To do that, it uses installation templates -- lists of installed packages, post-installation scripts and config files -- allowing the creation of installation profiles that can be used for system replication in other partition or even custom chroot building.
+
+Template creation is done with "templatepkg" script. To create a template called "my-slackware" containig the installed package list of your slackware installation, just type
+
+\begin{verbatim}
+templatepkg -c my-slackware
+\end{verbatim}
+
+The -c (or --create) flag tells templatepkg to create the /etc/simplepkg/templates/my-slackware folder with the following components:
+
+\begin{itemize}
+  \item /etc/simplepkg/templates/my-slackware/my-slackware.d: template config files
+  \item /etc/simplepkg/templates/my-slackware/my-slackware.s: post-installation scripts
+  \item /etc/simplepkg/templates/my-slackware/my-slackware.perms: metadata for config files
+  \item /etc/simplepkg/templates/my-slackware/my-slackware.template: installaed package list
+\end{itemize}
+
+This four components are enough to store all slackware installation characteristics: the package list controls with applications are installed, the config file folder can contain all desired configurations for any installed application and the post-installation scripts take care of all procedures that should be executed exactly after the system installation. The my-slackware.perms file contains metadata for the saved config files, i.e, permission and ownership.
+
+If you want to build a template from a installation placed in another folder or partition thats not your current root dir, just type something like
+
+\begin{verbatim}
+templatepkg -c my-slackware /mnt/slackware
+\end{verbatim}
+
+where /mnt/slackware is the place where this alternative system is installed. After created, the template will contain just the installed package list or that folder. As the folder /var/log/packages of your installation doesn't keep information about the package installation order, its recommended that you manually edit the template's package list. To do that, just type
+
+\begin{verbatim}
+templatepkg -e my-slackware
+\end{verbatim}
+
+To add configuration files inside the template, type something like
+
+\begin{verbatim}
+templatepkg -a my-slackware /etc/hosts
+\end{verbatim}
+
+This should add /etc/hosts file to "my-slackware" template. Beyond just automatically copy the file when you install a new system using this template, simplepkg can also take care of every change that /etc/hosts can suffer on your system, such as file content or permission and ownership change. If you're also storing your templates in a subversion repository, you'll be able to track all changes it ever had.
+
+WARNING: avoid the storage in a template of config files that contains important security information such as passwords or secret keys. The prefered place to put such stuff is a secured backup.
+
+\section{Creating jails and replicating installations}
+
+As long as your template was created and populated with the package list, configuration files and post-installation scripts (what will be treated in another section), your can replicate your slackware installation as simpler than typing the following command:
+
+\begin{verbatim}
+mkjail jail my-slackware
+\end{verbatim}
+
+This creates a fresh slackware tree at /vservers/jail with all packages listed in the template "my-slackware" and all saved config files. The package installation is made by simplaret app, that should be properly configured.  The standard simplaret configuration should work for most situations.
+
+If you want to install your jail in a place other than /vservers (this standard location can be changed through simpleokg config file), say /mnt/hda2, just use something like that:
+
+\begin{verbatim}
+ROOT=/mnt mkjail hda2 my-slackware
+\end{verbatim}
+
+The above command does exactly what you think: installs slackware in /mnt/hda2 with exactly the same packages you have on your system, replacing the need of the slackware installer!
+
+In case no template specified, mkjail uses the one stored /etc/simplepkg/defaults, if exists. Simplepkg already came if some pre-built templates at /etc/simplepkg/defaults/templates.
+
+\section{Post-installation scripts}
+
+Optionally, its possible to keep post-installation scripts inside a template. Such scripts are executed by mkjail exactly after a jail is installed and the template config files copied. To create or edit a post-installation script, just type
+
+\begin{verbatim}
+templatepkg -b my-slackware script-name.sh
+\end{verbatim}
+
+This adds the script-name.sh at "my-slackware" template. Mkjail passes two command line arguments to a post-install script: the upward folder and the jail's name ("/mnt" and "hda2" from our previous example). Then, an example script is something like that:
+
+\begin{verbatim}
+#!/bin/bash
+chroot $1/$2/ sbin/ldconfig
+\end{verbatim}
+
+\section{Listing template contents}
+
+To list available templates or the template content, use commands such as 
+
+\begin{verbatim}
+templatepkg -l
+templatepkg -l my-slackware
+\end{verbatim}
+
+\section{Removing files from a template}
+
+As you did to add files, you can easily remove then from a template, using a comand such as
+
+\begin{verbatim}
+templatepkg -d my-slackware /etc/hosts
+\end{verbatim}
+
+This removes the file /etc/hosts from "my-slackware" template.
+
+\section{Removing a template}
+
+To remove a template, just type
+
+\begin{verbatim}
+templatepkg -r my-slackware
+\end{verbatim}
+
+\section{Updating a template}
+
+Now that we just talked about creating templates and jails, its time to cover another application, this time used to keep a template always updated. Jail-commit is a script that copies all config file changes (content, permissions and ownership) from a installation to a simplepkg template.
+
+For instance, if one wants to copy all changes from /mnt/hda2 jail into "my-slackware" template, he or she just needs to type the following command:
+
+\begin{verbatim}
+jail-commit /mnt/hda2 my-slackware
+\end{verbatim}
+
+Not just the package list from "my-slackware" template is updated according the installed packages from /mnt/hda2/var/log/packages: all config files from "my-slackware" template are compared it the ones from the jail and in case of any difference they're copied from the jail back to the template. Permissions and file ownership commit into the template works at the same way.
+
+Jail-commit allows that a template to being kept always updated and mirroring the actual configuration of an installed system. But if you want just to commit into the template just the installed package list, simply type
+
+\begin{verbatim}
+templatepkg -u my-template
+\end{verbatim}
+
+To make life even easier, there's also a feature of keeping a list of all installed slackware system in the box in the file /etc/simplepkg/jailist. This file, despite its use by simplaret (what is described in its own text), allow jail-commit to run with no arguments.
+
+Suppose you have three slackware installations: the root system and two more:
+
+\begin{itemize}
+  \item /mnt/slackware-1 using "slackware-1" template
+  \item /mnt/slackware-2 using "slackware-2" template 
+\end{itemize}
+
+If your /etc/simplepkg/jailist has the following lines:
+
+\begin{verbatim}
+/mnt/slackware-1
+/mnt/slackware-2
+\end{verbatim}
+
+then the command
+
+\begin{verbatim}
+jail-commit
+\end{verbatim}
+
+will update both "slackware-1" and "slackware-2" templates according, respectivelly, the contents of /mnt/slackware-1 and /mnt/slackware-2. If you also have a template called "main", then jail-commit will sync the contents of your root system with that template.
+
+You can even add the following line at root's crontab
+
+\begin{verbatim}
+20 4 * * * jail-commit
+\end{verbatim}
+
+so all your templates get updated everyday. If your system is configured to send emails, then crontab's jail-commit output you give a summary of yesterday changes your system suffered, both config file changes and package additions and removals.
+
+\section{Restoring changes in a jail}
+
+The opposite operation of jail-commit also is possible: suppose you edited some config files in your system but suddenly wants to go back and copy all config files from a template to your jail. To do that, just use the command
+
+\begin{verbatim}
+jail-update /mnt/hda2 my-slackware
+\end{verbatim}
+
+\section{Storing templates inside a Subversion repository}
+
+In order to increase once more the control and flexibility of template contents, simplepkg can also handle templates inside a subversion repository. To do that, edit first the config gile /etc/simplepkg/simplepkg.conf and set the parameter TEMPLATES\_UNDER\_SVN to "yes".
+
+Then, create a fresh subversion repository to keep your templates with a command like that:
+
+\begin{verbatim}
+svnadmin create /var/svn/simplepkg --fs-type fsfs
+\end{verbatim}
+
+Then, you just need to import your templates with
+
+\begin{verbatim}
+templatepkg -e file:///var/svn/simplepkg
+\end{verbatim}
+
+From now jail-commit will commit automatically any template changes to the svn repository. If, in the other hand, you wish to grab the changes from the svn repository to your local copy, use
+
+\begin{verbatim}
+templatepkg -s
+\end{verbatim}
+
+In case you want to import a template folder from an existing repository, use
+
+\begin{verbatim}
+templatepkg -i file:///var/svn/simplepkg
+\end{verbatim}
+
+where file:///var/svn/simplepkg is the repository path.
+
+\section{Upgrading jails}
+
+Jail and installed system upgrading is done through simplaret and also supports /etc/simplepkg/jailist file.
+For more info on how it works, take a look at simplaret own documentation.
+
+\section{Different archs and versions}
+
+Simplepkg was idealized to permit a template to create jails from any architecture and version of a slackware-like system. Upgrading tasks also are unified. This feature just works if you use simplaret and not swaret as the package retrieval tool.
+
+As another example, to create an slack 10.1 installation (assuming your /etc/simplepkg/repos.conf with the right configuration), just type
+
+\begin{verbatim}
+VERSION=10.1 mkjail my-jail server-template 
+\end{verbatim}
+
+Different archs can be used too. If you have a x86\_64 system and wants to install a slack 10.2 in a partition, try something like
+
+\begin{verbatim}
+ARCH=i386 VERSION=10.2 ROOT=/mnt mkjail hda2 my-slackware
+\end{verbatim}
+
+Note that the templates are arch and version independent, as they just contain package names, configuration files and scripts. For this reason, the commands templatepkg, metapkg, lspkg and jail-update can be used normaly.
+
+\section{Creating a package from a template}
+
+If, for any reason, you wish to build a package from an existing template, try the command
+
+\begin{verbatim}
+templatepkg -p template-name
+\end{verbatim}
+
+Although that should work smoothly, its not the recommended behaviour, as simplepkg was designed to deal easily with templates and repositories.
+
+\section{Building packages}
+
+Until now, we just showed simplepkg applications used to manage installations and packages.  But simplepkg can also create packages using createpkg script: it downloads, builds and packages software that has an available script from a SlackBuild in a repository, working like a slackware ports system.
+
+Createpkg works with any SlackBuild repository but works better and is well integrated if they are compliant with the standards from http://slack.fluxo.info/trac/wiki/SlackBuilds.
+
+Specifically, createpkg was built to use slackbuilds from http://slack.fluxo.info/slackbuilds through a subversion repository.
+
+To fetch all scripts from slack.fluxo.info, type
+
+\begin{verbatim}
+createpkg --sync
+\end{verbatim}
+
+Then, you can list all available script using
+  
+\begin{verbatim}
+createpkg --list
+\end{verbatim}
+
+To search for a script, use something like
+
+\begin{verbatim}
+createpkg --search latex2html
+\end{verbatim}
+
+This searches for a SlackBuild for the program "latex2html". If you want to build that package, just type
+
+\begin{verbatim}
+createpkg latex2html
+\end{verbatim}
+
+The resulting package should be available at /tmp or at the folder specified by the environment variable \$REPOS. To create and install the package, type
+
+\begin{verbatim}
+createpkg --install latex2html
+\end{verbatim}
+
+If the package has dependencies listed in a slack-required file that aren't installed in the system, then createpkg will try to process then before the desired package's SlackBuild: if the dependencies aren't available in the SlackBuild tree, then createpkg will call simplaret and try to install the package from a binary repository. If you want to avoid createpkg's dependency checking, just use it with the flag --no-deps.
+
+For more information about createpkg, type
+
+\begin{verbatim}
+createpkg --help
+\end{verbatim}
+
+or take a look at http://slack.fluxo.info/trac/wiki/SlackBuilds.
+
+\section{Auxiliar applications}
+
+Simplepkg comes also with the following tools:
+
+\begin{itemize}
+   \item lspkg: show installed packages and its contents
+   \item rebuildpkg: rebuild a package based on its /var/log/packages entry
+   \item repos: creates and manages binary repositories
+   \item mkbuild: app to build slackware build scripts
+\end{itemize}
+
+The command lspkg is used to show installed packages. Also, Simplepkg comes with an additional helper tool that recover installed packages which the original .tgz file was lost. The command rebuildpkg rebuilds a package from their entry in /var/log/packages. As an example,
+
+\begin{verbatim}
+rebuildpkg coreutils
+\end{verbatim}
+
+rebuilds the coreutils package using the files, scripts and metainformations stored in /var/log/packages/ and /var/log/scripts/.
+
+For their time, scripts repos and mkbuild are used, respectivelly, to create and manage binary repositories and to create SlackBuild scripts.
+
+\section{Configuration parameters}
+
+Simplepkg's config file is /etc/simplepkg/simplepkg.conf and it keeps parameters used by all scripts. If you want to change some of its parameters, do not edit this file. Use /etc/simplepkg/simplepkg.conf instead as it overrides the default settings.
+
+In this section, we won't cover any parameter that's just used by simplaret, whose settings are covered in its own documentation.
+
+\begin{itemize}
+  \item JAIL\_ROOT: Where jails are placed by mkjail. Default: "/vservers".
+  \item ADD\_TO\_JAIL\_LIST: Wheter mkjial should add new jails to /etc/simplepkg/jailist. Default is "1" (enabled).  
+  \item TEMPLATES\_UNDER\_SVN: Set to yes if your templates will be placed in a subversion repository. Default is "no" (disabled).
+  \item TEMPLATE\_FOLDER: Where your templates will be located. Default is "/etc/simplepkg/templates" and dont change it except you know what you're doing.
+  \item TEMPLATE\_STORAGE\_STYLE: This variable controls in which folder / subfolder your templates will be stored. Default value is "own-folder" and you'll just need to change that if you're storing your templates using an old simplepkg format and wants to keep compatibilty.
+\end{itemize}
+
+Its important to note that all boolean parameters in the config file can be set either to "1" or "yes" to enable and "0" or "no" to disable.
+
+\section{Additional information}
+
+Simplepkg was written by Silvio Rhatto (rhatto at riseup.net) and is released under GPL license. The code can be obtained from the subversion repository:
+
+\begin{verbatim}
+svn checkout http://slack.fluxo.info/simplepkg
+\end{verbatim}
+
+Simplepkg's wiki is http://slack.fluxo.info/trac/wiki/Simplepkg and its mailing list address is http://listas.fluxo.org/wws/info/slack.
+
+\end{document}

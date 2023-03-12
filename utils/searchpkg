@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+#  This software is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  This software is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+# searchpkg: search packages inside a local slackware-like repository
+# this is part of simplepkg
+# feedback: rhatto at riseup.net | gpl
+# 
+
+# find . -type f -exec ls -l {} \; > FILELIST.TXT
+
+if [[ $# != 1 && $# != 2 ]]; then
+  echo "usage: $0 [-1] <repository> [package-name]"
+  echo "package-name can be either the full package file name, just its prefix or so"
+  echo "option -1 show just the first matching package"
+  exit 1
+fi
+
+FILELIST="$1/FILELIST.TXT"
+PACKAGE_FIELD="8"
+
+if [ -z "$2" ]; then
+ grep -E -e "$(pkg_ext_grep)" $FILELIST
+else
+  grep -e "$2" $FILELIST | grep -E -e "$(pkg_ext_grep)" | awk "{ print \$$PACKAGE_FIELD }"
+fi

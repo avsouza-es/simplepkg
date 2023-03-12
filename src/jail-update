@@ -1,0 +1,62 @@
+#!/bin/bash
+#
+# jail-update: update config files from a jail to a template
+# feedback: rhatto@riseup.net | gpl
+#
+#  Jail-update is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  Jail-update is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+
+COMMON="/usr/libexec/simplepkg/common.sh"
+BASENAME="`basename $0`"
+
+if [ -f "$COMMON" ]; then
+  source $COMMON
+  eval_config $BASENAME
+else
+  echo "error: file $COMMON found, check your $BASENAME installation"
+  exit 1
+fi
+
+function usage {
+
+  echo "$BASENAME: update a jail configuration from a template"
+  echo "usage: $BASENAME <jail-path> [template]"
+
+}
+
+if [ -z "$1" ] || [ "$1" == "--help" ] || echo $1 | grep -q -e "^--"; then
+  usage
+  exit 1
+fi
+
+if [ -z "$2" ]; then
+  template_name="`basename $1`"
+else
+  template_name="$2"
+fi
+
+search_template $template_name --update
+
+if [ "$?" != "0" ]; then
+  echo $BASENAME: template $template_name not found
+  exit 1
+elif [ ! -d "$1" ]; then
+  echo $BASENAME: jail $1 not found
+  exit 1
+fi
+
+update_template_files
+update_jail_packages $1
+copy_template_files $1
+set_jail_perms $1
+

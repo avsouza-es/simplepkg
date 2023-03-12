@@ -1,0 +1,115 @@
+#!/bin/bash
+#          
+# mkjail: chroot jail maker
+# feedback: rhatto at riseup.net | GPL
+#
+#  Mkjail is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  Mkjail is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+# $Rev$ - $Author$
+#
+
+COMMON="/usr/libexec/simplepkg/common.sh"
+BASENAME="`basename $0`"
+
+if [ -f "$COMMON" ]; then
+  source $COMMON
+else
+  echo "error: file $COMMON found, check your `basename $0` installation"
+  exit 1
+fi
+
+function usage {
+
+  echo "usage: [ARCH=arch] [VERSION=version] [ROOT=/otherroot] $BASENAME <jail-name> [template]"
+  exit 1
+
+}
+
+function exec_post_install_scripts {
+
+  # exec post installation scripts
+  # usage: exec_post_install_script <jail-root> <jail-name>
+
+  local list
+
+  if [ -z "$2" ]; then
+    return 1
+  fi
+
+  echo "$BASENAME: executing template scripts..."
+  if [ -d "`template_scripts`" ]; then
+    for file in `template_scripts`/*; do
+      if [ -x "$file" ]; then
+        $file $1 $2
+      fi
+   done
+  fi
+
+}
+
+function jailist_update {
+
+  # update the jail list file
+  # usage: jailist_update <jail-path>
+
+  if [ "$ADD_TO_JAIL_LIST" == "1" ]; then
+    touch $JAIL_LIST
+    if ! grep -q -e "^$1\$" $JAIL_LIST; then
+      echo $1 >> $JAIL_LIST
+    fi
+  fi
+
+}
+
+if [ -z "$1" ]; then
+  usage
+else
+  server="$1"
+  eval_config $BASENAME -u
+fi
+
+if [ ! -z "$2" ]; then
+  search_template $2
+  result="$?"
+else
+  search_default_template
+  result="$?"
+fi
+
+if [ "$result" != "0" ]; then
+  exit 1
+fi
+
+TEMPLATE="`template_packages`"
+
+if [ ! -d "$JAIL_ROOT/$server" ]; then
+  mkdir -p $JAIL_ROOT/$server
+else
+  if [ ! -z "`ls $JAIL_ROOT/$server | grep -v 'lost+found'`" ]; then
+    echo $BASENAME: error: folder $JAIL_ROOT/$server already exists and seens to be not empty
+    echo $BASENAME: probably the jail $1 already exists
+    exit 1
+  fi
+fi
+
+echo "Instaling packages into $JAIL_ROOT/$server..."
+echo "Using template $TEMPLATE."
+
+install_packages
+copy_template_files $JAIL_ROOT/$server
+set_jail_perms $JAIL_ROOT/$server
+jailist_update $JAIL_ROOT/$server
+exec_post_install_scripts $JAIL_ROOT $server
+
+echo $BASENAME: done creating $server jail
+

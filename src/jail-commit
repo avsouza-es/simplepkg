@@ -1,0 +1,175 @@
+#!/bin/bash
+#
+# jail-commit: update config files from a jail to a template
+# feedback: rhatto@riseup.net | gpl
+#
+#  Jail-commit is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  Jail-commit is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+
+COMMON="/usr/libexec/simplepkg/common.sh"
+BASENAME="`basename $0`"
+
+if [ -f "$COMMON" ]; then
+  source $COMMON
+  eval_config $BASENAME
+else
+  echo "error: file $COMMON found, check your $BASENAME installation"
+  exit 1
+fi
+
+function usage {
+
+  echo $BASENAME: commit a jail configuration into a template
+  echo "usage: \"$BASENAME [<jail-path> [template]]\""
+  echo "       \"$BASENAME --all\" to commit all templates"
+  echo "       \"$BASENAME --help\" for help"
+
+}
+
+function template_merge {
+
+  # copy differences between the jail
+  # and the template in the template folder
+
+  # usage: template_merge <jail-path>
+
+  if [ -z "$1" ] || [ ! -d "`template_files`" ]; then
+    return 1
+  fi
+
+  echo "" > `template_perms`.tmp
+  cd `template_files`
+
+  for file in `find | grep -v -e "/.svn$" | grep -v -e "/.svn/" | grep -v -e  "^\.$"`; do
+
+    if [[ -e "$file" && -e "$1/$file" ]]; then
+
+      if [ ! -d "$file" ] && [ ! -h "$file" ]; then
+        if ! diff -u $file $1/$file; then
+          echo Updating $file
+          cp -af $1/$file $file
+        fi
+      elif [ -h "$file" ]; then
+        if [ "`readlink $file`" != "`readlink $1/$file`" ]; then
+          rm -f $file
+          ln -s `readlink $1/$file` $file
+        fi
+      fi
+
+      perms="`numeric_perm $1/$file`"
+      owner="`get_owner $1/$file`"
+      group="`get_group $1/$file`"
+
+      # secure the file
+      chown root.root `template_files`/$file
+      chmod $perms `template_files`/$file
+      
+      echo "$file;$owner;$group;$perms" >> `template_perms`.tmp
+
+    else
+      if [ ! -e "$1/$file" ]; then
+        echo $BASENAME: warning: missing file `slash $1/$file`
+      fi
+    fi
+
+  done
+
+  cat `template_perms`.tmp | sed '/^$/d' > `template_perms`
+  rm -f `template_perms`.tmp
+
+  if templates_under_svn && ! svn_check `template_perms`; then
+    svn add `template_perms`
+  fi
+
+}
+
+function template_svn_commit {
+
+  # issue a svn_commit from a template folder
+  # usage: template_svn_commit <template-folder>
+
+  if templates_under_svn && svn_folder $1; then
+    cd $1
+    echo First checking out from the repository...
+    svn update
+    echo Commiting changes to the repository...
+    svn commit -m "changes for `date`"
+    if [ "$?" != "0" ]; then
+      echo $BASENAME: commit error
+    fi
+  fi
+
+}
+
+function do_commit {
+
+  # commit jail changes to a repository
+  # usage: do_commit <jailpath> [template]
+
+  local jailpath template
+
+  jailpath="$1"
+  jail="`basename $jailpath`"
+
+  if [ ! -z "$2" ]; then
+    template="$2"
+  else
+    template="$jail"
+  fi
+
+  search_template $template --update
+  if [ "$?" == "0" ] && ! echo "$TEMPLATE_UPDATE_LIST" | grep -q " `basename $TEMPLATE_BASE` "; then
+    TEMPLATE_UPDATE_LIST=" $TEMPLATE_UPDATE_LIST `basename $TEMPLATE_BASE` " # the spaces are important
+    if [ "$jailpath" == "/" ]; then
+      echo Updating main installation...
+    else
+      echo Updating $jailpath...
+    fi
+    if [ -d "`template_files`" ] || [ -a "`template_packages`" ]; then
+      SILENT=yes templatepkg -u $template $jailpath
+      template_merge $jailpath
+    fi
+  else
+    if [ -z "$SILENT" ]; then
+      echo $BASENAME: template $template not found
+    fi
+    return 1
+  fi
+
+}
+
+TEMPLATE_UPDATE_LIST=""
+
+if [ "$1" == "--help" ]; then
+  usage
+elif [ "$1" == "--all" ]; then
+  template_svn_commit $BASE_CONF/templates
+elif echo $1 | grep -q -e "^--"; then
+  usage
+elif [ ! -z "$1" ]; then
+  do_commit $1 $2
+  if [ "$?" == "0" ]; then
+    template_svn_commit `dirname $TEMPLATE_BASE`
+  fi
+else
+  SILENT="yes"
+  if [ -e $JAIL_LIST ]; then
+    for jailpath in `cat $JAIL_LIST`; do
+      do_commit $jailpath
+    done
+  fi
+  # main jail
+  do_commit / main
+  template_svn_commit $BASE_CONF/templates
+fi
+

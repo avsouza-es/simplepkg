@@ -1,0 +1,781 @@
+simplepkg changelog
+===================
+
+current
+=======
+
+    - new mkbuild sections acting as hooks:
+      - pre_configure
+      - configure
+      - pre_make_package
+      - make_package
+      - pre_install_package
+      - install_package
+      - post_install_package
+
+0.6
+===
+
+    - repos script moved to utils/ folder
+    - new "compact" template storage format
+    - common.sh:
+      - default arch when its not present at /etc/slackware-version is now assumed to be "i486"
+      - other minor changes and new functions
+      - repository metainformationg is now added at svn control if applicable
+      - new functions svn_remove_empty_folders, svn_del, su_svn, chown_svn, chgrp_svn,
+        regexp_slash, default_distro and svn_add
+      - new config parameter "TMP" 
+      - renamed function use_svn to templates_under_svn
+    - simplaret:
+       - support for HTTPS
+       - simplaret_search_and_process_patch do not donwload a package with the same
+         package name twice in any case
+       - simplaret_set_arch: mapping non-present architectures to i486
+    - default simplepkg.conf and repos.conf moved to defaults/ folder
+    - templatepkg and mkjail: minor changes
+    - templates:
+      - removed slackware and added slackware-12.1, slackware-12.2
+      - added slamd64-11.0, slamd64-12.0 and slamd64-12.1 templates
+    - repos.conf and simplepkg.conf:
+      - default configuration making createpkg repository integrated with simplaret
+      - new repositories
+    - mkbuild:
+      - added --edit command line options, among others
+      - code cleanup
+      - all previous "commit" functions and command line options changed to "submit" as they
+        don't really commit files into the svn repository
+      - function svn_mkdir moved to common.sh
+      - function svn_add moved to common.sh and renamed as svn_copy
+      - some svn check routines extended for git
+    - perl.mkSlackBuild
+       - added sections copy_init_scripts and copy_config_files
+    - generic.mkSlackBuild, perl.mkSlackBuild and kde4.mkSlackBuild
+      - clean_builds now compliant with standard --cleanup behaviour
+      - new section slack-required, download_patches, manifest_check
+    - generic.mkSlackBuild:
+      - config() on postinstall_script now accepting .dist and .sample config file extensions
+      - added git_source section
+    - createpkg:
+      - command line support for creating multiple packages
+      - fakeroot support
+      - new options --import, --status, --update and --commit to manage subversion repository, among others
+      - subversion integration
+      - minor changes
+      - renamed config parameter CREATE_ARCH to CREATEPKG_ARCH
+      - renamed all "MAKEPKG" config parameters to "PACKAGES", "MAKEPKG_REPOS" to "PACKAGES_DIR"
+      - cleaner -s option output
+     - new config parameters PACKAGES_REPOS_STYLE, MOVE_SLACK_REQUIRED, MKBUILDS_SVN_USER,
+       PACKAGES_SVN_USER, PACKAGES_SVN_GROUP, MKBUILDS_SVN_GROUP, PACKAGES_REPOS_NOARCH,
+       PACKAGES_SVN, CREATEPKG_AUTHOR, SIGN_PACKAGES, SIGN_PACKAGES_USER. SIGN_PACKAGES_KEYID,
+       SIGN_PACKAGES_WITH_GPG_AGENT, SOURCE_DIR_USER, SOURCE_DIR_GROUP, SIGN_MANIFESTS, 
+       SIGN_MANIFESTS_KEYID, SIGN_MANIFESTS_WITH_GPG_AGENT, FORCE_MANIFEST_CHECK,
+       FORCE_MANIFEST_CHECK_SIGNATURE, MKBUILD_AUTHOR, MKBUILD_AUTHOR_INITIALS
+    - lspkg: fix on package search routine
+    - jail-commit: using unified diff
+
+0.6pre30
+========
+
+    - common.sh: fixed package_name when dealing with files under /var/log/packages
+
+0.6pre29
+========
+
+    - templatepkg: fixed issue on adding files in a template.
+    - simplaret: "--sync" and "sync" now synonyms to "--update" and "update".
+
+0.6pre28
+========
+
+    - generic.mkSlackBuild: new section copy_config_files
+    - lspkg: change ls /var/log/packages/$1 to ...$1-[0-9]
+    - mkjail: fixed #27
+    - jail-update: installs/remove packages according the template (closes #10)
+    - simplaret:
+      - option --install working for multiple packages (closes #1)
+      - option --remove working for multiple packages
+    - mkpatch: fixed infinite loop on invalid diff action
+    - mkbuild 1.2.7:
+      - new ACTION bugfix
+      - search result bugfix
+      - protect MKBUILD_NAME and ACTION variables with "" in line 266
+    - createpkg 1.1.13:
+      - severals EXIT_CODE corrections
+      - search result bugfix
+
+0.6pre27
+========
+
+    - using Makefile instead of simplepkg.SlackBuild
+    - generic.mkSlackBuild: fix on svn_source
+    - createpkg 1.1.12:
+      - change indentation do two spaces;
+      - add option --debug|-d to debug SlackBuilds scripts;
+      - add EXIT_CODE to output status from createpkg;
+    - mkbuild 1.2.6:
+      - add --search|-s option;
+      - mkbuild copy all file in current directory different of *.SlackBuild,
+        *.old, *.tmp, and slack-required to mkbuild directory, in
+        commit_mkbuild function;
+      - mkbuild copy all file in current directory different of *.mkbuild,
+        *.old, and *.tmp to slackbuild repository, in commit_slackbuild
+        function;
+      - add EXIT_CODE to output status from mkbuild;
+
+0.6pre26
+========
+
+    - createpkg:
+      - add LANG=en_US in SlackBuild command line
+    - mkbuild:
+      - bugfix: add "" to protect all parameters in edit_file function call;
+      - change line 346-346 with "sed -i" command;
+      - add SVN_MOD variable to control svn source code;
+      - add control to SVN_MOD and URL "none" in activate_sections function;
+        - desable sections download_source, md5sum_download_and_check_0,
+          md5sum_download_and_check_1, gpg_signature_check untar_source, in
+          SVN_MOD or URL "none";
+        - enable section get_svn_source in SVN_MOD;
+      - EXTENSION, UNPACKER, UNPACKER_FLAGS, DECOMPRESSOR, and DECOMPRESSOR_TEST_FLAG
+        desable in SVN_MOD or URL "none";
+    - generic.mkSlackBuild:
+      - change PKG_SRC="$PWD...{ print $8 }'`" to  ...{ print $NF }'`"
+      - add svn_source section to grab subversion sources;
+      - comment lines limited to 79 columns;
+    - model.mkbuild:
+      - add "off:svn_source" line;
+
+0.6pre25
+========
+
+    - generic.mkSlackBuild:
+      - fixed gziped patch support at patch_source section
+      - added LDFLAGS for x86_64
+
+0.6pre24
+========
+
+    - mkbuild: added LICENSE and SIGNATURE on default [[DOCUMENTATION FILES]]
+    - perl.mkSlackBuild:
+      - gpg_signature_check: support for [[SIGNING KEY ID]] parameter
+      - minor fix
+
+0.6pre23
+========
+
+    - generic.mkSlackBuild:
+      - new section copy_init_scripts
+      - gpg_signature_check: support for [[SIGNING KEY ID]] parameter
+
+0.6pre22
+========
+
+    - generic.mkSlackBuild:
+      - enhanced patch_source section with [[PATCH URLS]] support
+      - minor changes
+
+0.6pre21
+========
+
+    - generic.mkSlackBuild:
+      - added -fPIC on SLKCFLAGS for x86_64
+
+0.6pre20
+========
+
+    - generic.mkSlackBuild:
+      - new section create_build_user_and_group
+      - new section move_config_files
+      - more gpg_signature_check section fixes
+      - new functions at postinstall_script section
+    - perl.mkSlackBuild:
+      - more gpg_signature_check section fixes
+
+0.6pre19
+========
+
+    - mkbuild-1.2.3:
+      - help function update
+    - createpkg-1.1.11:
+      - help function update
+    - generic.mkSlackBuild / perl.mkSlackbuild:
+      - gpg_signature_check section fixes
+
+0.6pre18
+========
+
+  - mkbuild-1.2.2:
+    - function change_others_parameters works of the beginning of the
+      archive .mkbuild until the line initiated for "#>>"
+    - added "--sync" option
+    - change indent spaces to 2
+    - "show slackbuild path" option (-sp) and related functions had been removed
+    - removed others small bugs
+  - common.sh: fixed default_arch
+  - simpletrack: error message
+
+0.6pre17
+========
+
+  - mkpatch add simple patch suport to mkbuild
+  - mkpatch-1.1:
+    - --help, -h option suport
+    - change select line: 'sed "#i g;d"'  is 30% most fast that 'sed -n "#i p"'
+    - change 'while' loop to most speed in patch application
+    - bug fixe: replace 'return' for 'exit' command
+  - mkbuild-1.2.0:
+    - added suport to mkpatch section in .mkbuild (apply_mkpatch function)
+
+0.6pre14
+========
+
+  - simplaret: ignoring slack-required lines starting which "#"
+
+0.6pre13
+========
+
+  - mkbuild-1.1.11:
+    - -sp, --slackbuild-path option added
+    - ACTION variable added (values are: new, show-path, and build)
+    - MKBUILD_NAME and MK_INPUT_FILE variables are the same ones
+    - Several 'sed - i' applied
+    - Changed caracter of separation in the command 'sed' for ¦
+    - Reorganized the function get_slackbuild_path
+    - Call for the function start_build moved of position
+
+0.6pre12
+========
+
+  - common.sh: small change
+
+  - generic.mkSlackBuild / perl.mkSlackBuild: minor fixe
+
+  - mkbuild-1.1.10:
+    - added inputs --path-files and --nps-strip
+    - remove old code 'let i++' in set_parameters function
+    - PATCH FILES parameter default set to ""
+    - NUMBER OF PREFIX SLASHES TO STRIP parameter default set to "1"
+    - change_others_parameters function minor fixe
+    - variable ARCH="noarch" in SlackBuild file, if [[ARCH]]="noarch"
+
+0.6pre11
+========
+
+  - common.sh:
+    - enhanced system arch and version detection
+    - minor changes
+
+  - simplaret:
+    - changed distro folder routine
+    - added --help | help command line option
+    - added simplified syntax:
+
+        simplaret ekiga # should work as simplaret install ekiga
+
+  - generic.mkSlackBuild / perl.mkSlackBuild: minor fixes
+
+0.6pre1-10
+==========
+
+  - added perl.mkSlackBuild
+
+  - generic.mkSlackBuild-0.9.0:
+    - added [[BUILD NUMBER]] parameter
+    - added variable PKG_WORK(=$TMP/$SRC_NAME) to package work directory
+    - PKG_SRC now is `ls -la | awk '/^d/ { print $8 }'`, directory in $PKG_WORK
+
+  - model.mkbuild-0.9.0:
+      - added [[BUILD NUMBER]]="" parameter
+
+  - createpkg-1.1.9:
+    - added option --all, to build all SlackBuilds in repository
+    - added number of parameters check
+    - integrate handle_error with common.sh
+    - moved handle_error and error_codes to common.sh (see above)
+    - usage function add exit program
+    - change ERROR_... codes to ERROR_CREATEPKG_...
+    - added SLACKBUILDS_SVN variable
+    - called to svn functions change to send SLACKBUILDS_DIR and SLACKBUILDS_SVN variables
+    - error 2 (usage function) change to usage function call
+
+  - mkbuild-1.1.9:
+    - added [[BUILD NUMBER]]="" parameter support
+    - bugfix: removed [] from is_number function call
+    - correction of some codes of error and calls the handle_error function
+    - added commit mkbuild, commit slackbuild , and commit all options
+    - removed error_codes and mkbuild_error to common.sh
+    - COMMIT variable change to COMMIT_SLACKBUILD
+    - added variable COMMIT_MKBUILD
+    - analysis of the variable NUMJOBS moved close to the reading from parameter NUMBJOBS
+    - reading of the variable SLACKBUILD_PATH was moved for the end of the list of parameters
+    - is_number function moved to common.sh
+    - added validate_parameter input check
+    - added support to the "empty parameter" in validate_parameter function
+    - added variables SLACKBUILDS_SVN, MKBUILDS_DIR and MKBUILDS_SVN
+    - added variables BASENAME (program name)
+    - COMMIT_SLACKBUILD and COMMIT_MKBUILD default set to off
+    - UNPACKER bugfix
+    - DECOMPRESSOR bugfix
+    - added most flexibility in the creation of initial ".mkbuild" file
+    - added commit_mkbuild function
+    - bugfix: input of set_parameters ($@) protected with ""
+    - bugfixes: -a, -u, and -ai options
+
+  - common.sh
+    - ERROR_PAR_NUMBER - incorrect number of parameters
+    - ERROR_COMMON_NOT_FOUND - file common.sh not found
+    - added error_codes function
+    - added handle_error function
+    - added svn functions:
+      - build_repo (build a svn repository)
+      - check_repo (check repository)
+      - sync_repo (synchronize repository)
+    - added is_number function.
+        Check if input is a number
+
+  - bugfixes:
+    - common.sh: added ;; in the end from line 787
+    - common.sh: change handle_error exit to "is_number $1 && exit $1 || exit 1"
+    - createpkg: protect parameters in solve_dep call with ""
+    - mkbuild: change "PACKGE NAME" parameter to "PKG NAME"
+    - model.mkbuild: change "PACKGE NAME" parameter to "PKG NAME"
+
+  - simplepkg.conf:
+    - new config variables:
+      - MKBUILDS_DIR (mkbuilds directory repository)
+      - SLACKBUILDS_SVN (SlackBuild svn source)
+      - MKBUILDS_SVN (Mkbuild svn source)
+
+  - model.mkbuild:
+    - Some changes to integrate to applicatory the external ones:
+      - [[SLACKBUILD AUTHOR]] default change to "[[YOUR NAME]]"
+      - [[SLACKBUILD AUTHOR INITIALLS]] default change to "[[YOUR SIGNATURE]]"
+      - [[DONLOAD FOLDER URL]] default change to "[[DEFAULT URL]][[PACKGE NAME]]"
+      - all [[NAME]] change to [[PACKGE NAME]]
+      - added [[ARCH]]="" parameter
+
+  - lspkg-0.4:
+    - added error code 1 to fail exit
+
+0.6pre1-8
+=========
+
+  - common.sh:
+    - fixed http://slack.fluxo.info/trac/ticket/19
+
+  - added simpletrack script
+
+  - simplaret:
+    - lots of fixes (thanks Diogo for finding and reporting two of them)
+    - performance enhancement on --upgrade
+
+  - createpkg:
+    - small fixes
+    - starting support for repository management
+
+  - mkbuild:
+    - lots of changes
+
+  - documentation update
+
+0.5pre23
+========
+
+  - updated documentation
+
+0.5pre22
+========
+
+  - simplaret:
+    - small fix
+  - common.sh:
+    - fixes on metafiles generation
+
+0.5pre21
+========
+
+  - templatepkg:
+    - now --delete can also remove the file from a jail
+
+0.5pre20
+========
+
+  - small changes
+  - jail-commit:
+    - template files security
+
+0.5pre19
+========
+
+  - simplaret:
+    - bugfixes
+    - options --get and --install now can work
+      with full file name.
+
+0.5pre15-18
+===========
+
+  - bugfixes
+
+0.5pre14
+========
+
+  - simplaret
+    - added variable REPOS_PRIORITY
+    - added variable SIMPLARET_DOWNLOAD_FROM_NEXT_REPO
+
+  - lspkg:
+    - small bugfix
+
+  - common.sh:
+     - on search_template, doesnt return a template from
+       defaults/ if the function is called with --update
+
+  - utils/add-slack-required:
+    - command line enhancement
+
+0.5pre9 - 0.5pre13
+==================
+
+  - bugfix releases
+
+0.5pre8
+=======
+
+  - lspkg:
+    - bugfix
+
+  - common.sh:
+    - bugfix in function slash
+
+0.5pre7
+=======
+
+  - simplaret:
+    - fixed bug for ROOT definitions when there is packages
+      inside of folders different than ROOT_PRIORITY
+
+0.5pre6
+=======
+
+  - repos:
+    - FILE_LIST generation fix
+
+  - mkjail:
+    - new config variable ADD_TO_JAIL_LIST controls wheter to
+      add new jails into the JAIL_LIST file
+
+0.5pre5
+=======
+
+  - jail-commit
+    - SILENT env variable to decrease verbosity
+
+0.5pre4
+=======
+
+  - templatepkg:
+    - small fixes
+    - help usage summary improvements
+    - now using variable TEMPLATE_FOLDER
+    - SILENT env variable to decrease verbosity
+    - option -p | --post-install renamed to -b | --batch-edit
+    - option -p | --post-install now used to build a package from a template
+    - option -d | --delete now can also remove post-install scripts
+
+  - common.sh
+    - small fixes
+    - now using variable TEMPLATE_FOLDER
+
+  - jail-commit:
+    - calling templatepkg silently
+    - small fixes
+
+0.5pre3
+=======
+
+  - again, lots of bugfixes
+
+  - jail-commit:
+    - update a template just once if finds more than one entry
+      for a template in the jailist
+
+0.5pre2
+=======
+
+  - lots of bugfixes
+
+  - templatepkg:
+    - now creates missing components in a template
+
+0.5pre1
+=======
+
+  Lots of changes!
+
+  - repos: cosmetic changes
+
+  - lspkg:
+    - support for $ROOT env variable
+    - some improvements
+
+  - CHANGELOG cleanup
+
+  - subversion repository support for templates
+
+  - metapkg moved to utils/
+
+  - simplaret:
+    - new config variables:
+      - STORE_ROOT_PATCHES_ON_PATCHES_DIR
+      - SIGNATURE_CHECKING
+      - ROOT=/otherroot works for --install, --remove and --upgrade
+    - signature checking
+    - dependency checking through slack-required
+
+  - mkjail:
+    - added support for slack-required as templates
+    - templates now can be stored either on
+      - /etc/simplepkg/template_name.template
+      - /etc/simplepkg/templates/template_name.template
+      - /etc/simplepkg/templates/template_name/template_name.template
+
+  - jail-update
+    - old script renamed to jail-commit
+    - now update a jail from a template
+    - svn repository support
+
+  - jail-commit
+    - new script, commit changes from a jail to the templates
+    - svn repository support
+
+  - templatepkg:
+    - major rewrite
+    - svn repository support
+    - now supports a tagfile or slack-required as a template
+    - new/changed options
+      -c | --create: improvements
+      -a | --add: changed to add files into a template
+      -u | --update: update a template
+      -d | --delete: delete files or folders from a template
+      -s | --sync: sync /etc/simplepkg/templates working copy
+      -e | --export: export /etc/simplepkg/templates to a svn repository
+      -i | --import: grab /etc/simplepkg/templates from a svn repository
+      -r | --remove: remove a template
+      -l | --list: list templates
+      -p | --post-install: add or edit post-installation scripts
+      -t | --template-edit: edit template package list
+      -h | --help: display this summary
+
+0.4.9pre18-23
+=============
+
+  - simplaret:
+    - enhanced http retrieval: curl support
+    - enhanced verbosity
+    - get-patches small changes
+    - various fixes
+
+0.4.9pre10-17
+=============
+
+  - lots of simplaret fixes
+
+0.4.9pre9
+=========
+
+  - createpkg:
+    - speedup
+    - ncftpget support
+    - timeout support
+    - sets the correct architecture
+
+  - deleted jail-upgrade
+
+  - removed swaret support
+
+0.4.9pre8
+=========
+
+  - createpkg: bugfix
+
+  - common.sh:
+    - enhanced config file evaluation
+    - fixed function default_arch
+
+  - simplaret:
+    - config evaluation via common.sh
+    - new config parameter SIMPLARET_PURGE_PATCHES
+
+0.4.9pre7
+=========
+
+  - repos: added patches/ metafile creation
+
+  - jail-upgrade:
+    - added option CONSIDER_ALL_PACKAGES_AS_PATCHES
+    - merged swaret and simplaret upgrade procedures
+    - act recursively on patches' folder
+
+  - simplaret: lots of changes, most important are:
+    - new repository scheme, take a look at repos.conf.new.
+    - --get looks first to PATCHES repositories, then ROOT,
+      then REPOS and finally at NOARCH repositories; the
+      firts matching package is downloaded.
+    - new config parameter ROOT_PRIORITY set the priority
+      of folder lookup at a ROOT repository, defaults to
+      "patches slackware extra testing pasture".
+    - for --get, check if an already existing package
+      in the local repository has the same version and
+      build number, otherwise erase the old and download
+      the new one.
+    - fixed --get-paches
+    - added --upgrade option
+    - added --install
+    - added --remove
+    - new config parameter DOWNLOAD_EVEN_APPLIED_PATCHES
+
+  - createpkg: lots of changes
+
+0.4.9pre6
+=========
+
+  - createpkg:
+    - fixes
+    - now with slackbuild error handling
+    - increased verbosity
+
+  - small fixes on rebuildpkg
+
+  - lspkg enhancements
+
+  - simplaret fix on --purge
+
+  - updated default repos.conf
+
+0.4.9pre5
+=========
+
+  - added script "repos"
+
+  - moved simplaret to /usr/bin
+
+0.4.9pre4
+=========
+
+  - createpkg: better command line evaluation,
+    now using "upgradepkg --install-new" to
+    install a package and added the command
+    line option --no-deps so createpkg doesn't
+    goes down to solve all slack-required
+    dependencies.
+
+0.4.9pre3
+=========
+
+  - small fix on createpkg when handling with
+    slackbuilds with similar names
+
+0.4.9pre2
+=========
+
+  - fixed simplepkg.SlackBuild
+
+  - fixed doinst.sh
+
+  - re-organized the source repository
+
+  - added createpkg
+
+  - updated README and README.pt_BR
+
+0.4.8
+=====
+
+  - simplaret: removed extra folder from slamd64 definition
+
+  - fixed a typo
+
+0.4.7
+=====
+
+  - templatepkg bugfix on blank template lines and on package deletion
+    changed simplaret working dir in simplaret.conf.new
+
+0.4.6
+=====
+
+  - small bugfix on jail-update that prevented template update
+
+0.4.5
+=====
+
+  - vserver template update
+
+0.4.4
+=====
+
+  - WARNING option on config file for simplaret
+
+  - SILENT env var, if a non-zero value, keeps simplaret
+    work silenty when purging and works like if WANRING is set
+    to not null.
+
+  - added SIMPLARET_DELETE_DURING config parameter: when set
+    to a non-zero value deletes each package rigth after its
+    installation
+
+0.4.3
+=====
+
+  - added openoffice.org template
+
+0.4.2
+=====
+
+  - common.sh: fix on install_packages when handling
+    with similar package names
+
+0.4.1
+=====
+
+  - templatepkg: fixed tagfiles and comment handling
+
+0.4
+===
+
+  - multi-plataform and version management
+
+    now simplepkg supports jails with architectures and versions
+    others than the main system, read the docs for details.
+
+  - added simplaret: a small script for downloading packages
+
+  - jail-upgrade
+
+      * arch checking via /etc/slackware-version on each jail
+      * supports multi-arch and multi-version repository
+      * integrated with simplaret
+
+  -  common.sh: improved functions to support simplaret
+
+0.3.7-0.3.9
+===========
+
+  - bugfix releases
+
+0.3.6
+=====
+
+  - added "-u" option to eval_config to ask for a swaret --update
+
+0.3.5
+=====
+
+  - "main" jail support for jail-update
+
+0.3.4
+=====
+
+  - Started changelog :)
+

@@ -1,0 +1,854 @@
+\documentclass[12pt,a4paper,oneside]{article}
+%\usepackage[T1]{fontenc}
+\usepackage[latin1]{inputenc}
+\usepackage[dvips]{graphicx}
+%\usepackage{subfigure}
+\usepackage{mdwlist}
+\usepackage{a4}
+%\topmargin -.5in
+%\addtolength{\hoffset}{-1.0cm}
+%\addtolength{\textwidth}{3.0cm}
+%\textwidth = 400pt
+%\textheight = 680pt
+
+\makeatletter
+
+%\usepackage[pdftex]{color,graphicx}
+%\DeclareGraphicsExtensions{.jpg,.pdf,.mps,.png}
+
+\usepackage[brazil]{babel}
+\usepackage[dvips]{graphicx}
+%\usepackage{textdraw}
+
+\input texdraw
+%\newenvironment{textdraw}{\leavevmode\btexdraw}{\etexdraw}
+
+\newcommand{\rcap}[1]{Capítulo \ref{#1}}
+\newcommand{\rfig}[1]{Figura \ref{#1}}
+\newcommand{\rtab}[1]{Tabela \ref{#1}}
+\newcommand{\rsec}[1]{Seção \ref{#1}}
+
+\makeatother
+
+\begin{document}
+
+
+\title{Construindo SlackBuilds com mkbuild}
+
+\author{Rudson Alves\\v. 1.2}
+
+\date{\today}
+
+\maketitle
+
+%\pagenumbering{roman}
+
+\tableofcontents{}
+%\listoffigures
+%\listoftables
+
+%\abstract{...}
+
+
+\section*{Introdução}
+
+O \textit{mkbuild} é um programa em \textit{script shell} que auxiliar na construção de pacotes para o \textit{Slackware}. A grosso modo, o \textit{mkbuild} é um construtor de \textit{Slackbuild}\footnote{\textit{SlackBuilds} são \textit{script} utilizado para a construção de um pacote binário de um programa, no \textit{Slackware}.}. Ele opera a partir de um arquivo de parâmetros e de modelos de \textit{Slackbuilds} parametrizados.
+
+Este texto apresenta informações úteis para utilização do \textit{mkbuild} na construção destes arquivos de parâmetros, bem como configurar e utilizar modelos de \textit{SlackBuilds} e outras personalizações.
+
+O \textit{mkbuild} é uma ferramenta distribuída juntamente com o \textit{simplepkg}, um projeto do grupo Slack.Sarava. Para a utilização desta ferramenta você deverá instalar o pacote conforme as instruções abaixo:
+
+\begin{verbatim}
+# LASTVERSION=`lynx -dump http://slack.fluxo.info/packages/noarch/ \
+               | grep 'simplepkg-.*\.tgz' | awk '{print $2}'`
+# wget $LASTVERSION
+# installpkg simplepkg-*.tgz
+\end{verbatim}
+
+Para mais informações veja os links abaixo:
+
+\begin{itemize}
+ \item http://slack.fluxo.info/simplepkg - Descrição de todo o projeto \textit{Simplepkg}, por Rhatto - coordenador do projeto \textit{Slack.Sarava};
+ \item http://slack.fluxo.info/node/25 - Tutorial básico de instalação do \textit{Simplepkg}, por rafael2k - um grande colaborador.
+\end{itemize}
+
+
+\section{O modelo generic.mkSlackBuild}
+
+O \textit{mkbuild} utiliza o modelo padrão \textit{generic.mkSlackBuild}, armazenado em
+
+\begin{verbatim}
+/etc/simplepkg/defaults/mkbuild/
+\end{verbatim}
+
+Este modelo é uma versão setorizada do \textit{generic.SlackBuild}, levemente modificada. O \textit{generic.SlackBuild} é um modelo genérico de \textit{Slackbuilds} criado por nosso colega e colaborador Luís, para servir como modelo para a construção dos \textit{Slackbuilds}. Outros modelos setorizados podem ser utilizados pelo \textit{mkbuild}, a única limitação é quanto ao nome da seção \textit{slackdesc}, que não poderá ser alterada.
+
+
+\subsection{Os Campos}
+
+O modelo \textit{generic.mkSlackBuild} é um \textit{SlackBuild} genérico com vários campos destacados por duplo colchetes, [[ \dots ]], com mostra o trecho abaixo:
+
+\begin{verbatim}
+...
+<set_variables> all
+# Set variables
+CWD="$(pwd)"
+SRC_NAME="[[SOURCE NAME]]"
+PKG_NAME="[[PACKAGE NAME]]"
+ARCH=${ARCH:=[[ARCH]]}
+SRC_VERSION=${VERSION:=[[VERSION]]}
+PKG_VERSION="$(echo "$SRC_VERSION" | tr '[[:blank:]-]' '_')"
+BUILD=${BUILD:=1[[SLACKBUILD AUTHOR INITIALS]]}
+...
+PREFIX=${PREFIX:=[[PREFIX]]}
+PKG_SRC="$TMP/$SRC_NAME-$SRC_VERSION"
+</set_variables>
+...
+\end{verbatim}
+
+Uma breve descrição destes campos é apresentada na tabela abaixo: \\
+\\
+\begin{tabular}{l|l}
+\hline \hline
+\textbf{Campo} & \textbf{Descrição}\\
+\hline \hline
+PROGRAM NAME               & nome do programa                               \\
+PROGRAM URL                & \textit{URL} da fonte do pacote                \\
+SLACKBUILD AUTHOR          & nome do autor                                  \\
+SOURCE NAME                & nome da fonte, sem versão ou extensão          \\
+PACKAGE NAME               & nome do pacote e ser gerado                    \\
+ARCH                       & arquitetura do pacote. Padrão i486      \\
+VERSION                    & versão do pacote                               \\
+SLACKBUILD AUTHOR INITIALS & assinatura utilizada pelo autor                \\
+PREFIX                     & prefixo da instalação (/usr, /opt, \dots)\\
+SOURCE EXTENSION           & extensão da fonte (bz2, gz, \dots) \\
+UNPACKER                   & programa de dessempacotamento (geralmenrte "tar") \\
+UNPACKER FLAGS             & flags para o desempacotador \\
+DOWNLOAD FOLDER URL        & \textit{URL} da pasta onde se encontra a fonte \\
+DECOMPRESSOR               & o descompressor para a fonte (gunzip, bunzip2, \dots) \\
+DECOMPRESSOR TEST FLAG     & \textit{flag} de teste do descompressor        \\
+SIGNING KEY URL            & \textit{URL} da chave \textit{gpg} do fonte    \\
+SIGNING KEY                & chave \textit{gpg} da fonte                    \\
+MD5SUM EXTENSION           & extensão utilizada pelo arquivo \textit{md5sum}\\
+PATCH FILES                & arquivo \textit{path}                          \\
+NUMBER OF PREFIX SLASHES TO STRIP  & \dots                                  \\
+SOURCE NAME CONSTRUCTION STRING  & string para a construção do nome do arquivo. O padrão é \$SRC\_NAME-\$VERSION.tar.\$EXTENSION  \\
+OTHER CONFIGURE ARGS       & argumentos de configuração passados ao ./configure \\
+DOCUMENTATION FILES        & lista de arquivos para a pasta /usr/doc/PACKAGE \\
+SLACK-DESC                 & conteúdo do slack-desc, descrição do pacote \\
+REST OF DOINST.SH          & conteúdo do doinst.sh                   \\
+\hline
+\end{tabular}
+\\\\
+
+Em alguns casos o nome do pacote difere do nome da fonte, como é o caso da fonte \textit{sigc++}, que gera o pacote de nome \textit{libsiggc++}. Por este motivo que existem os campos \textit{SOURCE NAME} e \textit{PACKAGE NAME}. Para uma compreensão mais profunda destes campos, aconselho fazer uma análise mais detalhada do modelo \textit{generic.mkSlackBuild}.
+
+
+\subsection{As Seções}
+
+As seções no modelo \textit{generic.mkSlackBuild}, são iniciadas pela \textit{tag} <nome\_da\_seção> e terminadas com </nome\_da\_seção>, como em um código \textit{html}, \underline{sem espaços}.
+
+A única seção que não pode ter seu nome alterado é \textit{slackdesc}. Esta seção é editada de uma forma diferenciada pelo \textit{mkbuild} e a alteração de seu nome poderá gerar erro.
+
+Cada seção possui uma \textit{flag} com os possíveis valores:
+
+\begin{description}
+ \item[on] habilitado;
+ \item[off] desabilitado;
+ \item[all] sempre habilitado.
+\end{description}
+
+A intenção destas \textit{flags} é gerar um padrão para as seções, deixando em \textbf{all} as seções que deverão estar sempre habilitadas e \textbf{on} ou \textbf{off} seções que podem ser habilitadas ou desabilitadas de acordo com as necessidades do \textit{SlackBuild} que será construído\footnote{Na versão 1.1.x do mkbuild, todas as seções foram configuradas como \textbf{off}, para simplificar a vizualização do script de configuração \textit{.mkbuild}.}.
+
+As seções padrões do \textit{generic.mkSlackBuild} são listadas na tabela abaixo:
+\\\\
+\begin{tabular}{l|l|c|c}
+\hline
+Seção & Descrição & 1.0.x & 1.1.x\\
+\hline
+head                         & cabeçalho do \textit{SlackBuild}         & all & on \\
+slackbuildrc                 & carrega \textit{script} \textit{slackbuildrc} & off & off \\
+set\_variables               & inicia as variáveis                      & all & on \\
+slkflags                     & carrega \textit{flags} para compilação   & all & on \\
+error\_codes                 & códigos de erro para o \textit{createpkg}  & off & off \\
+start\_structure             & cria diretórios para compilação          & all & on \\
+download\_source             & baixa a fonte do pacote                  & off & off \\
+md5sum\_download\_and\_check\_0 & verifica \textit{md5sum} da fonte por código & off & off \\
+md5sum\_download\_and\_check\_1 & verifica \textit{md5sum} da fonte por arquivo & off & off \\
+gpg\_signature\_check        & verifica assinatura \textit{gpg} da fonte & off & off \\
+untar\_source                & desempacota a fonte                      & all & on \\
+path\_source                 & aplica \textit{path} a fonte             & off & off \\
+configure                    & configura pacote                         & off & off \\
+make\_package                & compila o pacote                         & all & on \\
+install\_package             & instala o pacote em diretório temporário & all & on \\
+strip\_binaries              & limpa binários                           & off & off \\
+compress\_manpages           & comprime páginas de manuais              & off & off \\
+compress\_info\_files        & comprime arquivos \textit{info}          & off & off \\
+install\_documentation       & instala documentação                     & off & off \\
+slackdesc                    & \textit{slackdesc} do pacote             & off & off \\
+postinstall\_script          & \textit{script} de pós-instalação        & off & off \\
+build\_package               & constrói pacote                          & all & on \\
+clean\_builds                & remove fontes e instalação temporária    & off & off \\
+\hline
+\end{tabular}
+\\\\
+
+A terceira e a quarta colunas da tebela acima apresentam o status padrão para as seções nas versões 1.0.x e 1.1.x do \textit{mkbuild}. No \textit{mkbuild} versão 1.0.x, as seções \textbf{all} são configuradas no modelo \textit{generic.mkSlackBuild}. A partir da versão 1.1.x estas seções serão definidas como \textbf{on} ou \textbf{off} no \textit{model.mkbuild}, não mais no modelo \textit{generic.mkSlackBuild}.
+
+
+\section{Configuração}
+
+O \textit{mkbuild} utiliza quatro variáveis de configuração em /etc/simplepkg/simplepkg.conf. São elas:
+
+\begin{description}
+ \item[SLACKBUILDS\_DIR] diretório onde serão guardados os \textit{SlackBuilds} e \textit{slack-required} gerados. Necessário para o uso com a opção \textbf{-c}, \textit{commit}. Padrão /var/simplaret/slackbuilds;
+ \item[MKBUILDS\_DIR] diretório onde serão guardados os \textit{.mkbuilds} criados. Necessário para o uso com a opção \textbf{-c}, \textit{commit}. Padrão /var/simplaret/mkbuilds;
+ \item[SLACKBUILDS\_SVN] endereço do repositório subversion dos \textit{SlackBuilds}. Mantenha o valor padrão;
+ \item[MKBUILDS\_SVN] endereço do repositório subversion dos \textit{SlackBuilds}. Mantenha o valor padrão;
+ \item[COLOR\_MODE] define modo de cores para o \textit{mkbuild} e \textit{createpkg}. Padrão \textit{none}, preto e branco.
+ \end{description}
+
+
+\section{Criando o SlackBuild do aplicativo pyrex}
+
+Para fazer um \textit{SlackBuild} com o \textit{mkbuild} é necessário criar um arquivo com os parâmetros que deseja que sejam passados para o modelo. Um arquivo de configuração simples, \textit{sample-Pyrex-small.mkbuild}, é apresentado abaixo:
+
+\begin{verbatim}
+#--------------------
+# Variables
+#--------------------
+# Author name
+[[SLACKBUILD AUTHOR]]="Adalberto Simão Nader"
+
+#
+# Complete URL address or URL base address ( without $SRC_NAME-$VERSION... )
+[[DOWNLOAD FOLDER URL]]="http://www.cosc.canterbury.ac.nz/greg.ewing/python/Pyrex/Pyrex-0.9.5.1a.tar.gz"
+
+#
+# Default enable sections:
+#      head, set_variables, slkflags, start_structure, untar_source,
+#      make_package, install_package, build_package
+# Warning: don't remove '#>>' and "#<<" tags.
+#>> Start SlackBuild Sections:
+ on: head
+ on: slackbuildrc
+ on: set_variables
+ on: slkflags
+ on: error_codes
+ on: start_structure
+ on: download_source
+ on: md5sum_download_and_check_0
+ on: untar_source
+ on: configure
+ on: make_package
+ on: install_package
+ on: strip_binaries
+ on: install_documentation
+ on: slackdesc
+ on: build_package
+ on: clean_builds
+#<< End SlackBuild Sections
+
+#------------------
+# Sections changes
+#------------------
+#>slackdesc
+pyrex: Pyrex by Slack.Sarava
+pyrex:
+pyrex: Pyrex is a language specially designed for writing Python extension
+pyrex: modules. Its designed to bridge the gap between the nice, high-level,
+pyrex: easy-to-use world of Python and the messy, low-level world of C.
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+#<slackdesc
+\end{verbatim}
+
+Isto é o suficiente para fazer o \textit{SlackBuild} do \textit{Pyrex}. Para construir o \textit{SlackBuild} basta chamar o \textit{mkbuild} passando este arquivo de parâmetros:
+
+\begin{verbatim}
+$ mkbuild sample-Pyrex-small.mkbuild
+$ ls
+pyrex.SlackBuild      pyrex.mkbuild                sample-Pyrex-small.mkbuild
+pyrex.SlackBuild.old  sample-Pyrex-large.mkbuild
+\end{verbatim}
+
+Ele irá criar os arquivos \textit{pyrex.SlackBuild} e \textit{slack-required}, se o parâmetro \textit{SLACK REQUIRED} for passado. Arquivos antigos serão renomeados para \textit{.old}.
+
+Um modelo mais completo, com todos os parâmetros, \textit{sample-Pyrex-large.mkbuild}, é disponibilizado junto com o \textit{mkbuild}. Nas seções seguintes é apresentado uma breve descrição dos parâmetros e seções deste arquivo de parâmetros.
+
+
+\subsection{Descrição dos parâmetros do arquivo \textit{.mkbuild}}
+
+Embora existam muitos parâmetros no modelo \textit{generic.mkSlackBuild}, nem todos são necessários para a construção do \textit{SlackBuild}. Neste exemplo foram passados apenas dois parâmetros:
+
+\begin{description}
+ \item[SLACKBUILD AUTHOR] nome do autor;
+ \item[DOWNLOAD FOLDER URL] url completa da fonte do pacote.
+ \end{description}
+
+O mkbuild remove o nome do pacote, versão, assinatura do autor e várias outras informações destes dados, seguindo alguns critérios descritos a seguir.
+
+A sintaxe para a passagem de parâmetros ao \textit{mkbuild} pelo arquivo de parâmetros \textit{.mkbuild} é
+
+\begin{verbatim}
+[[DESCRIÇÃO DO PARÂMETRO]]="Parâmetro entre aspas duplas"
+\end{verbatim}
+
+As aspas duplas podem ser omitidas\footnote{Nas versões inferiores a 0.9.9, do \textit{mkbuild}, a aspas dupla é o delimitador e por isto é obrigatório. Um parâmetro passado sem o aspas duplo será interpretado como um parâmetro vazio, nestas versões.}. O delimitador utilizado pelo \textit{mkbuild} é o primeiro caracter igual (=) a aparecer na linha e o fim de linha. Qualquer outra ocorrência de caracter igual será lido como parte do parâmetro. O mesmo acontece com comentários colocados após o caracter igual. Por exemplo, na linha abaixo:
+
+\begin{verbatim}
+[[PARÂMETRO TEST]]=Este parâmetro é um teste            # Este comentário será lido.
+\end{verbatim}
+
+\noindent a leitura do parâmetro \textit{PARÂMETRO TEST} retornará:
+
+\begin{verbatim}
+Este parâmetro é um teste            # Este comentário será lido.
+\end{verbatim}
+
+Segue abaixo uma breve descrição dos parâmetros utilizados pelo modelo \textit{generic.mkSlackBuild}.
+
+\subsubsection{SLACKBUILD AUTHOR e SLACKBUILD AUTHOR INITIALS}
+
+O parâmetro \textit{SLACKBUILD AUTHOR} deve conter o nome ou apelido do responsável pelo \textit{SlackBuild}. A declaração deste parâmetro é obrigatória e sem ele o \textit{mkbuild} irá interromper a construção do \textit{SlackBuild}.
+
+\begin{verbatim}
+[[SLACKBUILD AUTHOR]]="Adalberto Simão Nader"
+\end{verbatim}
+
+O parâmetro \textit{SLACKBUILD AUTHOR INITIALS} é construído a partir da primeira letra de cada nome passado pelo parâmetro \textit{SLACKBUILD AUTHOR}, em letras minúsculas. Neste caso a assinatura será "\verb!asn!", as iniciais de \textit{Adalberto Simão Nader}.
+
+Caso deseje passa outro valor basta adicionar a linha abaixo, ao arquivo de parâmetros.
+
+\begin{verbatim}
+[[SLACKBUILD AUTHOR INITIALS]]="adal"
+\end{verbatim}
+
+
+\subsubsection{DOWNLOAD FOLDER URL}
+
+O parâmetro \textit{DOWNLOAD FOLDER URL} é outro parâmetro obrigatório em um arquivo \textit{.mkbuild}. Este parâmetro pode conter o endereço completo da fonte do pacote:
+
+\begin{verbatim}
+[[DOWNLOAD FOLDER URL]]="http://www.cosc.canterbury.ac.nz/greg.ewing/python/Pyrex/Pyrex-0.9.5.1a.tar.gz"
+\end{verbatim}
+
+Neste caso várias informações são removidas deste parâmetro. Este parâmetro pode ainda conter apenas o endereço do diretório de onde a fonte poderá ser encontrada:
+
+\begin{verbatim}
+[[DOWNLOAD FOLDER URL]]="http://www.cosc.canterbury.ac.nz/greg.ewing/python/Pyrex/"
+\end{verbatim}
+
+Neste caso, é necessário a definição de outros parâmetros necessários para a construção do nome do pacote, como \textit{SOURCE NAME, PACKAGE NAME, VERSION e EXTENSION}, descritos a seguir.
+
+
+\subsubsection{SOURCE NAME, PACKAGE NAME, VERSION e EXTENSION}
+
+O \textit{SOURCE NAME} é removido do \textit{URL}, caso não seja passado como parâmetro.
+
+Para que o \textit{SOURCE NAME} seja carregado corretamente, é necessário que o nome da fonte tenha a forma padrão:
+
+\begin{verbatim}
+NOME-DO-PROGRAMA-VER.SÃO.tar.EXTENSÃO
+\end{verbatim}
+
+O nome do programa pode ter vários campos separados por um hífen "\verb!-!", já a versão, pode possuir vários números, ou mesmo letras, separados por ponto e terminados por um "\verb!.tar.!". A extensão deve vir logo após o "\verb!.tar.!".
+
+A variável \textit{PACKAGE NAME}, é construída com o mesmo valor de \textit{SOURCE NAME}, mas em letras minúsculas.
+
+Desta forma, a divisão dos campos no exemplo do aplicativo Pyrex, acima, terá o mesmo valor que as declarações dos parâmetros abaixo:
+
+\begin{verbatim}
+[[SOURCE NAME]]="Pyrex"
+
+[[PACKAGE NAME]]="pyrex"
+
+[[VERSION]]="0.9.5.1a"
+
+[[EXTENSION]]="gz"
+\end{verbatim}
+
+Observe que a precedência é a passagem do valor como parâmetro, e não a sua construção.
+
+
+\subsubsection{UNPACKER e UNPACKER FLAGS}
+
+\textit{UNPACKER} contêm o nome do programa desempacotador das fontes, geralmente o comando "\verb!tar!", enquanto que o parâmetro \textit{UNPACKER FLAGS}, carrega as flags para o desempacotador. Os seus valores padrões são:
+
+\begin{verbatim}
+[[UNPACKER]]="tar"
+[[UNPACKER FLAGS]]="--no-same-owner --no-same-permissions -xvf"
+\end{verbatim}
+
+
+\subsubsection{SOURCE NAME CONSTRUCTION STRING}
+
+Deve conter uma string para a construção do nome da fonte. O valor padrão é
+
+\begin{verbatim}
+[[SOURCE NAME CONSTRUCTION STRING]]="$SRC_NAME-$VERSION.tar.$EXTENSION"
+\end{verbatim}
+
+Observe que os parâmetros passados não são processados, como ocorre em uma leitura de uma variável num bash \textit{script}. Eles são lidos como se fossem uma cadeia de caracteres, por isto não tente escapar o \$ na construção do nome, ou o nome da fonte não será construído corretamente na execução do \textit{SlackBuild}.
+
+Embora a variável \$EXTENSION apareça na construção do nome da fonte, seu valor será substituído durante a construção do \textit{SlackBuild} pelo \textit{mkbuild}. Por isto que não existe inicialização desta variável no modelo \textit{generic.mkSlackBuild}.
+
+
+\subsubsection{DECOMPRESSOR e DECOMPRESSOR TEST FLAG}
+
+Os parâmetros \textit{DECOMPRESSOR} e \textit{DECOMPRESSOR TEST FLAG} são determinados por análise do parâmetro \textit{EXTENSION}, com os valores apresentados na tabela abaixo:
+\\\\
+\begin{tabular}{l|l|c}
+\hline
+EXTENSION & DECOMPRESSOR & DECOMPRESSOR TEST FLAG \\
+\hline
+gz, GZ   & gunzip  & -t \\
+bz2, BZ2 & bunzip2 & -t \\
+zip, ZIP & unzip   & -t \\
+\hline
+\end{tabular}
+
+Caso possua uma fonte comprimida por um compressor diferente, passe estes parâmetros pelo arquivo de parâmetros, \textit{.mkbuild}.
+
+\begin{verbatim}
+[[DECOMPRESSOR]]="programa descompressor"
+[[DECOMPRESSOR TEST FLAG]]="flag de teste"
+\end{verbatim}
+
+
+\subsubsection{DOCUMENTATION FILES}
+
+O valor padrão para \textit{DOCUMENTATION FILES} é
+
+\begin{verbatim}
+[[DOCUMENTATION FILES]]="NEWS TODO README AUTHORS INSTALL ChangeLog MAINTAINERS COPYING readme.*"
+\end{verbatim}
+
+Estes são os nomes mais comuns dos arquivos de documentação, que geralmente são disponibilizados na raiz do diretório das fontes dos programas. O ideal é descompactar a fonte e verificar os arquivos de documentação disponíveis, para passá-los como parâmetro.
+
+
+\subsubsection{PREFIX}
+
+A maioria das fontes de programas disponibilizados atualmente, utilizam uma opção "\verb!--prefix!" no seu \textit{configure}, para determinar o diretório onde o programa será instalado. Nas versões inferiores a 12.0 do \textit{Slackware} o valor desta variável variava entre /usr, /opt e /usr/X11. Na versão 12.0, e provavelmente nas superiores, os diretórios /opt e /usr/X11 foram removidos e todos os pacotes estão sendo instalados em /usr. Por isto o seu valor padrão é /usr.
+
+\begin{verbatim}
+[[PREFIX]]="/usr"
+\end{verbatim}
+
+
+\subsubsection{NUMBER OF JOBS}
+
+O parâmetro \textit{NUMBER OF JOBS} é usado para indicar ao comando \textit{make} o número de processos que podem ser iniciados simultaneamente durante a compilação da fonte. A grande maioria dos programas atuais podem ser compilados em dois ou mais processos simultâneos. Isto reduz sensivelmente o tempo de compilação de um pacote, mesmo que sua máquina possua apenas um processador. Muitos \textit{SlackBuilds} oficiais do \textit{Slackware} utilizam este parâmetro configurado para "\verb!7!" processos, ou seja "\verb!-j7!". Este parâmetro pode ser passado como um número ou com a flag "\verb!-j!", como nos exemplos abaixo.
+
+\begin{verbatim}
+[[NUMBER OF JOBS]]="7"
+\end{verbatim}
+
+\noindent ou
+
+\begin{verbatim}
+[[NUMBER OF JOBS]]="-j7"
+\end{verbatim}
+
+
+\subsubsection{SLACK REQUIRED}
+
+Este parâmetro é composto pela lista de pacotes necessários para a construção do aplicativo. Estes pacotes serão arranjados no arquivo \textit{slack-required}. O formato para este parâmetro é apresentado na linha abaixo:
+
+\begin{verbatim}
+DEPENDÊNCIA_1 [CONDIÇÃO_1] [VERSÃO_1]: DEPENDÊNCIA_2 [CONDIÇÃO_2] [VERSÃO_2]: DEPENDÊNCIA_3 [CONDIÇÃO_3] [VERSÃO_3]: ...
+\end{verbatim}
+
+As condições possíveis são apresentadas na tabela abaixo:
+\\\\
+\begin{tabular}{c|l}
+\hline
+CONDIÇÃO & significado \\
+\hline
+=  & igual \\
+>  & maior \\
+>= & maior ou igual \\
+\hline
+\end{tabular}
+
+Os campos \textit{CONDIÇÃO} e \textit{VERSÃO} podem ser omitidos. Cada pacote da dependência deve ser separado por um ":".
+
+Para o \textit{SLACK REQUIRED} definido com a linha:
+
+\begin{verbatim}
+[[SLACK REQUIRED]]="dep1 >= 1.1.1: dep2 >= 2.2.2:dep3:dep4:dep5 = 1.0"
+\end{verbatim}
+
+\noindent será gerado o arquivo \textit{slack-required} abaixo:
+
+\begin{verbatim}
+# Dependency list to Pyrex
+#
+# dependency [condition] [version]]
+dep1            >=              1.1.1
+dep2            >=              2.2.2
+dep3
+dep4
+dep5            =               1.0
+\end{verbatim}
+
+
+\subsubsection{SLACKBUILD MODEL}
+
+Este parâmetro contém o nome do modelo utilizado para gerar os \textit{SlackBuilds}. O valor padrão é \textit{generic.mkSlackBuild}. Outros modelos podem ser utilizados adicionando-se o arquivo do modelo no diretório /etc/simplepkg/defaults/mkbuild/. A linha abaixo
+
+\begin{verbatim}
+[[SLACKBUILD MODEL]]="generic.mkSlackBuild.2"
+\end{verbatim}
+
+\noindent define o modelo \textit{generic.mkSlackBuild.2} para a construção do \textit{SlackBuild}.
+
+
+\subsubsection{SLACKBUILD PATH}
+
+Este parâmetro é necessário apenas para uso com a opção "\verb!-c!", \textit{commit}. Ele indica o diretório, na estrutura de diretórios do Slack.Sarava, onde o \textit{SlackBuild} construído deverá ser armasenado. Se este parâmetro não for passado, o \textit{mkbuild} irá pesquisá-lo no repositório do \textit{gentoo}, pela \textit{internet}\footnote{Esta pesquisa automática do mkbuild tem se mostrado pouco eficiente. Por isto é aconselhável verifica com um navegador a localização do \textit{SlackBuild} em http://gentoo-portage.com.}. Caso não consiga resolver com esta pesquisa, o \textit{SlackBuild} será colocado em um diretório padrão para \textit{scripts} não classificados, "\verb!others/unclassified/$PKG_NAME!".
+
+\begin{verbatim}
+[[SLACKBUILD PATH]]="dev/python/pyrex"
+\end{verbatim}
+
+A estrutura de diretórios para armazenamento dos \textit{SlackBuilds} adotadas pelo \textit{Slack.Sarava} segue o mesmo padrão do \textit{portage} do \textit{gentoo}.
+
+
+\subsubsection{Outros Parâmetros}
+
+Outros parâmetros podem ser passados para substituição no modelo \textit{generic.mkSlackBuild}, como o parâmetro \textit{MD5SUM EXTENSION} no trecho abaixo:
+
+\begin{verbatim}
+#[[PATCH FILES]]=""
+#[[MD5SUM CODE]]=""
+[[MD5SUM EXTENSION]]="047574eb5d1b7848a70d4130035f1f3c"
+#[[SIGNING KEY]]=""
+#[[SIGNING KEY URL]]=""
+#[[PATCH FILES]]=""
+\end{verbatim}
+
+Além destes parâmetros padrões do \textit{generic.mkSlackBuild}, qualquer outro parâmetro pode ser criado e incluído ao modelo. Para isto é necessário que seu nome seja incluído entre duplo colchetes como no exemplo abaixo:
+
+\begin{verbatim}
+[[NEW PARAMETER]]="new value"
+\end{verbatim}
+
+O \textit{mkbuild} irá procurar a ocorrência da seqüência \textit{[[NEW PARAMETER]]} no modelo passado por \textit{[[SLACKBUILD MODEL]]} e irá substitui-lo por "\verb!new value!".
+
+
+\subsection{Habilitando seções}
+
+As seções do modelo \textit{generic.mkSlackBuild} são habilitadas na seção iniciada por "\verb!#>>!" e terminada por "\verb!#<<!", no arquivos de parâmetros. Como as seções estão desabilitadas no modelo padrão, \textit{generic.mkSlackBuild}, esta seção do arquivo de parâmetros tem apenas que habilitar as seções desejadas do modelo.
+
+\begin{verbatim}
+#>> Start SlackBuild Sections:
+ on: head
+ on: slackbuildrc
+ on: set_variables
+ on: slkflags
+ on: error_codes
+ on: start_structure
+ on: download_source
+off: md5sum_download_and_check_0
+off: md5sum_download_and_check_1
+off: gpg_signature_check
+ on: untar_source
+off: patch_source
+ on: configure
+ on: make_package
+ on: install_package
+ on: strip_binaries
+off: compress_manpages
+off: compress_info_files
+ on: install_documentation
+ on: slackdesc
+# esta linha é ignorada
+off: postinstall_script
+ on: build_package
+ on: clean_builds
+#<< End SlackBuild Sections
+\end{verbatim}
+
+No caso do exemplo acima, são desabilitadas as seções: \textit{md5sum\_download\_and\_check\_0}, \textit{md5sum\_download\_and\_check\_1}, \textit{gpg\_signature\_check}, \textit{patch\_source}, \textit{compress\_manpages}, \textit{compress\_info\_files} e \textit{postinstall\_script}. Linhas iniciadas por uma tralha, \#, são ignoradas. Como no modelo generic.mkSlackBuild todas as seções estão desabilitadas ("off"), apenas as seções ligadas necessitam ser habilitadas.
+
+
+\subsection{Substituição de seções no modelo}
+
+Em algumas situações pode ser necessário substituir o conteúdo de uma seção. Estas mudanças são feitas iniciando uma seção, no arquivo de parâmetros, pela \textit{tag} "\verb!#>nome_da_seção!" e terminar pela \textit{tag} "\verb!#<nome_da_seção!". Quando o \textit{mkbuild} localiza estas seções no arquivo de parâmetros, ele substitui as seções padrões, de mesmo nome, pelo conteúdo definido no arquivo de parâmetros. Por exemplo:
+
+\begin{verbatim}
+#>untar_source
+# Untar program
+
+# Change to temp dir
+cd "$TMP"
+
+# Uncompress e untar source
+gunzip "$SRC_DIR/$SRC" | tar --no-same-owner --no-same-permissions -xvf || exit $ERROR_TAR
+
+# Change to source dir
+cd "$PKG_SRC"
+#<untar_source
+\end{verbatim}
+
+\noindent irá substituir a seção \textit{untar\_source} do modelo \textit{generic.mkSlackBuild}, pelo conteúdo definido no arquivo de parâmetros acima. A única exceção a esta regra é a seção \textit{slackdesc}.
+
+\begin{verbatim}
+#>slackdesc
+pyrex: Pyrex by Slack.Sarava
+pyrex:
+pyrex: Pyrex is a language specially designed for writing Python extension
+pyrex: modules. Its designed to bridge the gap between the nice, high-level,
+pyrex: easy-to-use world of Python and the messy, low-level world of C.
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+#<slackdesc
+\end{verbatim}
+
+Para esta seção, o \textit{mkbuild} irá substituir o parâmetro \textit{[[SLACK-DESC]]} pelo conteúdo definido entre "\verb!#>slackdesc!" e "\verb!#<slackdesc!", além de redimensionar a régua de orientação do \textit{slack-desc}.
+
+
+\section{Exemplo 2: mkbuild do dosbox}
+
+Embora a documentação do comando \textit{mkbuild} seja relativamente longa, não é necessário muito esforço para se fazer um \textit{SlackBuild} de um \textit{pacote bem comportado}.
+
+Entenda-se por \textit{pacote bem comportado}, pacotes que podem ser construídos pelos comandos: 
+
+\begin{verbatim}
+ # ./configure && make && make install
+\end{verbatim}
+
+e cujo o nome da fonte obedeça o padrão: \textit{NOME.DO.PACOTE-VERSÃO.tar.EXTENSÃO}. Um bom exemplo disto é o pacote do dosbox, o qual será usado como exemplo nesta seção.
+
+Inicie a construção do \textit{.mkbuild} com o comando abaixo:
+
+\begin{verbatim}
+# mkbuild -a "<<seu nome>>" -ai "<<iniciais>>" -n dosbox
+\end{verbatim}
+
+Não é necessário o nome e assinatura passados pelas opções \textbf{-a} e \textbf{-ai}, mas é aconselhável. A opção \textbf{-n} diz ao \textit{mkbuild} para copiar o modelo em \textit{/etc/simplepkg/\dots/model.mkbuild}, para o diretório atual com o nome \textit{dosbox.mkbuild}, e aplicar o nome "dosbox" a este modelo.
+
+Em seguida, edite o arquivo \textit{dosbox.mkbuild}, com um editor de sua escolha, e preencha os campos com os valores abaixo:
+
+\begin{verbatim}
+[[DOWNLOAD FOLDER URL]]="http://downloads.sourceforge.net/dosbox/dosbox-0.71.tar.gz"
+[[SLACKBUILD PATH]]="games/emulation/dosbox"
+
+#>slackdesc
+dosbox: DOSBox.slackBuild by Slack.Sarava
+dosbox:
+dosbox: DOSBox is a DOS-emulator that uses the SDL-library which makes DOSBox
+dosbox: very easy to port to different platforms. DOSBox has already been 
+dosbox: ported to many different platforms, such as Windows, BeOS, Linux, 
+dosbox: MacOS X...
+dosbox:
+dosbox: DOSBox also emulates CPU:286/386 realmode/protected mode, Directory 
+dosbox: FileSystem/XMS/EMS, Tandy/Hercules/CGA/EGA/VGA/VESA graphics, a 
+dosbox: SoundBlaster/Gravis Ultra Sound card for excellent sound 
+dosbox: compatibility with older games...
+#<slackdesc
+
+\end{verbatim}
+
+Por se tratar de um \textit{pacote bem comportado}, o \textit{dosbox.mkbuild} é bem simples. Todas as informações são removidas da URL do programa, não necessitando de mais declarações. O campo \textit{SLACKBUILD PATH} é necessário apenas se você for enviar o \textit{SlackBuild} para o repositório do grupo \textit{Slack.Sarava}. A seção \textit{slackdesc} também não é necessária, mas é importante, pois informa o conteúdo do pacote durante a instalação.
+
+
+\section{Criando um \textit{patch} para pequenas alterações}
+
+A partir da versão 1.2 do \textit{mkbuild} é possível fazer pequenas alterações ao modelo \textit{generic.mkSlackBuild}, com a aplicação de um \textit{patch} simplificado. Este \textit{patch} é aplicado ao modelo \textit{generic.mkSlackBuild} antes que qualquer outra edição seja feita ao modelo.
+
+Um \textit{patch} simplificado deve ser definido no arquivo de parâmetros \textit{.mkbuild} entre as \textit{tags} \verb!#p>! e \verb!#p<!, com no exemplo abaixo:
+
+\begin{verbatim}
+...
+#p>
+... Alterações ...
+#p<
+...
+\end{verbatim}
+
+As linhas com as alterações devem sempre iniciar com um \textit{caracter de controle}, seguido pelo conteúdo da linha a ser alterada, removida ou conferida ao modelo \textit{generic.mkSlackBuild}. O formato do \textit{patch} usado pelo \textit{mkbuild} segue o mesmo padrão gerado pelo comando \verb!diff -u!, com as seguintes diferenças:
+
+\begin{enumerate}
+ \item Não possui numeração de linhas. A posição das alterações é referenciada por uma ou mais linhas de referência. Uma linha de referência deve ser única, ou em caso de várias linhas, a seqüência deve ser única;
+ \item O número de linhas de referência é variável e não necessita de linhas de referência ao final da alteração;
+ \item O caracter para separar as alterações é o caracter igual, =.
+\end{enumerate}
+
+
+\subsection{Caracteres de controle}
+
+Os \textit{caracteres de controle} são apenas quatro. Com eles é possível fazer todas as alterações por substituição de linha necessárias em um \textit{patch}. Segue abaixo a descrição destes caracteres de controle:
+
+\begin{description}
+ \item[" " (espaço)] este caracter de controle serve para definir linhas de referência, necessárias para localizar a posição das alterações no modelo \textit{generic.mkSlackBuild};
+ \item[- (menos)] serve para referenciar linhas que serão removidas do modelo. Este caracter de controle serve ainda para definir linhas de referência, entretanto lembre-se que elas serão removidas;
+ \item[+ (mais)] serve para indicar linhas que serão adicionadas ao modelo, logo após a referência;
+ \item[= (igual)] serve para indicar o final de uma alteração e iniciar a próxima. Qualquer coisa colocado após um \textit{caracter de controle} igual, será ignorado.
+ \end{description}
+
+Para simplificar a compreensão do funcionamento deste \textit{patch} simplificado, segue abaixo um exemplo para alterações hipotéticas.
+
+
+\subsection{mkpatch: Alterando uma linha}
+
+Neste exemplo, será alterado o conteúdo da variável \textit{ARCH} para fixá-la em \textit{i586}. Isto pode ocorre na construção de pacotes de programas pré-compilados ou um pacote binário. Para fazer esta alteração, basta acrescentar o \textit{patch} abaixo ao final do arquivo \textit{.mkbuild}:
+
+\begin{verbatim}
+...
+#p>
+ PKG_NAME="[[PACKAGE NAME]]"
+-ARCH=${ARCH:=[[ARCH]]}
++ARCH=i586
+#p<
+\end{verbatim}
+
+A primeira linha, \verb!PKG_NAME="[[PACKAGE NAME]]"!, iniciada pelo \textit{caracter de controle} \textbf{espaço}, é uma linha de referência a ser procurada no modelo \textit{generic.mkSlackBuild}, posicionando a alteração ao modelo. A segunda linha, com o \textit{caracter de controle} \textbf{menos}, indica a linha que será removida: \verb!ARCH=${ARCH:=[[ARCH]]}"!. A terceira linha, com o \textit{caracter de controle} \textbf{mais}, será adicionada logo em seguida: \verb!ARCH=i586!.
+
+Observe que o mesmo poderia ser feito com o \textit{patch} abaixo:
+
+\begin{verbatim}
+...
+#p>
+-ARCH=${ARCH:=[[ARCH]]}
++ARCH=i586
+#p<
+\end{verbatim}
+
+Como o \textit{caracter de controle} \textbf{menos} também serve como referência e a alteração será feita da mesma forma.
+
+
+\subsection{mkpatch: Aplicando uma segunda alteração}
+
+Para uma segunda alteração ao modelo, vou alterar a forma de instalação e fazer mais algumas edições a seção \textit{strip\_binaries}:
+
+\begin{verbatim}
+#p>
+-ARCH=${ARCH:=[[ARCH]]}
++ARCH=i586
+===
+ <install_package> off
+-# Install
++# Install Setup
+-make install DESTDIR="$PKG" || exit $ERROR_INSTALL
+-./setup --prefix="$PKG" || exit $ERROR_INSTALL
+===
+ # Strip binaries
+ ( cd "$PKG"
+-  find . | xargs file | grep "executable" | grep ELF | cut -f 1 -d : | \
+-    xargs strip --strip-unneeded 2> /dev/null
+-  find . | xargs file | grep "shared object" | grep ELF | cut -f 1 -d : | \
+-    xargs strip --strip-unneeded 2> /dev/null
++  find . | xargs file | grep ELF | xargs strip --strip-unneeded 2> /dev/null
+#p<
+\end{verbatim}
+
+A segunda alteração, troca a linha de comentário adicionado a palavra \verb!Setup! e por fim o comando de instalação, para a chamada \verb!./setup! \dots
+
+A terceira alteração é feita à seção \textit{strip\_binaries}, onde os dois comando \verb!find! são trocados por um terceiro mais simples.
+
+
+\section{Apêndice-A}
+
+Vários outros parâmetros podem ser passados ao \textit{mkbuild} pela linha de comando. Um manual completo destas opções pode ser consultado passando \textit{flag} \verb!--help! ou \verb!-h!, ao \textit{mkbuild}:
+
+\begin{verbatim}
+NAME
+        mkbuild - create SlackBuild script from .mkbuild input file
+
+SYNOPSIS
+        mkbuild [OPIONS] [mkbuild_file]
+
+DESCRIPTION
+        <mkbuild_file> input file with build rules and variables
+
+        Input options:
+            -a, --author <author_name>
+                author name
+            -ai, --author_initials <initials>
+                author signature
+            -bn, --build-number
+                change build number
+            -cs, --const_string <string>
+                construction string to source name
+            -u, --url <url_address>
+                url address to source
+            -pn, --pkg_name <package_name>
+                package name
+            -sn, --src_name <source_name>
+                source name
+            -pv, --pkg_version <version>
+                package version
+            -md, --model <SlackBuild_model>
+                SlackBuild model file
+            -j, --jobs <jobs_number>
+                Number of jobs to run simultaneously
+            --prefix <install_dir>
+                Prefix install directory
+            -pf, --patch-files
+                List of patch files
+            -npss, --nps-strip
+                Number of prefix slashes to strip
+
+        Program options:
+        -h, --help
+            this help mesage
+        -cs, --commit-slackbuild
+            commit SlackBuilds in local svn SlackBuild tree
+        -cm, --commit-mkbuild
+            commit .mkbuild in local svn mkbuild tree
+        -c, --commit-all
+            commit SlackBuild and .mkbuild files in local svn tree
+        -n, --new <mkbuild_name>
+            start a new mkbuild configure file
+        -v, --version
+            program version
+        -V, --verbose
+            print debug information
+        -sp, --slackbuild-path
+            print SlackBuild path in Slack.Sarava tree
+
+EXAMPLES
+        mkbuild -c pyrex.mkbuild
+            build pyrex.SlackBuild and commit .mkbuild and .SlackBuild in
+            Slack.Sarava local tree.
+        mkbuild -a "Jose Araujo" -ai "ja" -n pyrex
+            make a basic pyrex.mkbuild with author name "Jose Araujo" and
+            author signature "ja".
+        mkbuild --prefix /usr/local pyrex.mkbuild
+            build pyrex.SlackBuild with prefix /usr/local and pyrex.mkbuild
+            variables and options definitions.
+
+AUTHOR
+        Written by Rduson R. Alves
+
+AVAILABILITY
+        by svn: svn checkout svn://slack.fluxo.info/simplepkg
+        this mkbuild is found in branches/0.6/
+
+REPORTING BUGS
+        Report bugs to <alves_list@yahoo.com.br>
+
+COPYRIGHT
+        Copyright © 2006 Free Software Foundation, Inc.
+        This is free software. You may redistribute copies of it under the
+        terms of the GNU General Public License
+        <http://www.gnu.org/licenses/gpl.html>. There is NO WARRANTY, to the
+        extent permitted by law.
+\end{verbatim}
+
+Uma opção interessante é a \verb!-c!, utilizada para adicionar e atualizar uma cópia do \textit{SlackBuild} gerado na lista de \textit{SlackBuilds} local.
+
+Slack.Sarava agradece a toda e qualquer contribuição que possa nos ajudar a manter e a desenvolver este projeto.
+
+\end{document}
+

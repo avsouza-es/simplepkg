@@ -1,0 +1,189 @@
+#
+#  This mkbuild is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  This mkbuild is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+# Version 0.9.0 - Alves ( rudsonalves at yahoo d0t com d0t br )
+# Version $Rev$ - $Author$
+
+#--------------------
+# Personal variables
+#--------------------
+# Author name
+[[SLACKBUILD AUTHOR]]="[[YOUR NAME]]"
+
+# Initials author name
+[[SLACKBUILD AUTHOR INITIALS]]="[[YOUR SIGNATURE]]"
+
+#------------------------
+# Construction Variables
+#------------------------
+#
+# Complete URL address or URL base address ( without $SRC_NAME-$VERSION... )
+[[DOWNLOAD FOLDER URL]]="[[DEFAULT URL]]"
+
+# Source base name. if different from package name. Null ("") to default value.
+# Auto-set, get SRC_NAME from URL: http://.../$SRC_NAME-$VERSION.tar.$EXTENSION'
+[[SOURCE NAME]]=""
+
+# Package name. Null ("") to auto-set
+# Auto-set, get PKG_NAME from URL downcase(SRC_NAME): http://.../$SRC_NAME-$VERSION.tar.$EXTENSION'
+[[PACKAGE NAME]]=""
+
+#
+# Package default ARCH
+# Default set is i486
+[[ARCH]]=""
+
+#
+# Package version.  Null ("") to auto-set.
+# Auto-set, get VERSION from URL: http://.../$SRC_NAME-$VERSION.tar.$EXTENSION'
+[[VERSION]]=""
+
+#
+# Package extension. Null ("") to auto-set
+# Auto-set, get EXTENSION from URL: http://.../$SRC_NAME-$VERSION.tar.$EXTENSION'
+[[EXTENSION]]=""
+
+#
+# Build number.
+# Auto-set to default 1
+[[BUILD NUMBER]]=""
+
+#
+# Source Name construction string
+# Default value is: $SRC_NAME-$VERSION.tar.$EXTENSION
+[[SOURCE NAME CONSTRUCTION STRING]]="$SRC_NAME-$VERSION.tar.$EXTENSION"
+
+#
+# Unpacker programa ("") to auto-set. Default "tar"
+# Unpacke Flags ("") to auto-set. Default flags to tar "--no-same-owner --no-same-permissions -xvf"
+[[UNPACKER]]=""
+[[UNPACKER FLAGS]]=""
+
+#
+# Dependency list input
+# Enter string: "dependency_1 [condiction_1] [versio_1]: dependency_2 [condiction_2] [versio_2]"
+# Example:
+[[SLACK REQUIRED]]=""
+
+#
+# Decompress program
+# gz, tgz, bz2, set null ("") to auto-set
+# Auto-set, get DECOMPRESSOR from URL EXTENSION: http://.../$SRC_NAME-$VERSION.tar.$EXTENSION'
+[[DECOMPRESSOR]]=""
+
+#
+# Decompress check flag
+# gz, tgz, bz2, set null ("") to auto-set
+[[DECOMPRESSOR TEST FLAG]]=""
+
+#
+# Documentation files. Null ("") to auto-set commom doc-files:
+# NEWS TODO README AUTHORS INSTALL ChangeLog MAINTAINERS COPYING readme.*
+[[DOCUMENTATION FILES]]=""
+
+#
+# ./configure options
+[[OTHER CONFIGURE ARGS]]=""
+
+#
+# PREFIX. Default /usr
+[[PREFIX]]="/usr"
+
+#
+# Number of jobs
+[[NUMBER OF JOBS]]=""
+
+#---------------------
+# Others changes
+#---------------------
+#[[MD5SUM CODE]]=""
+#[[MD5SUM EXTENSION]]=""
+#[[SIGNING KEY]]=""
+#[[SIGNING KEY URL]]=""
+#[[SIGNING KEY ID]]=""
+#[[SIGNING URL]]=""
+#[[CONFIG FILES]]=""
+#[[PATCH URLS]]=""
+#[[REST OF DOINST.SH]]=""
+[[PATCH FILES]]=""
+[[NUMBER OF PREFIX SLASHES TO STRIP]]="1"
+
+# SlackBuild model
+[[SLACKBUILD MODEL]]="generic.mkSlackBuild"
+
+# SlackBuild PATH in Slack.Sarava tree
+#[[SLACKBUILD PATH]]="others/unclassified/$PKG_NAME"
+[[SLACKBUILD PATH]]=""
+
+#---------------------
+# SlackBuild Sections
+#---------------------
+# Default sections:
+#      head, set_variables, slkflags, start_structure, untar_source,
+#      make_package, install_package, build_package
+# Warning: don't remove '#>>' and "#<<" tags.
+#>> Start SlackBuild Sections:
+ on: head
+ on: slackbuildrc
+ on: set_variables
+ on: slkflags
+ on: error_codes
+ on: start_structure
+off: create_build_user_and_group
+ on: download_source
+off: download_patches
+off: svn_source
+off: git_source
+off: md5sum_download_and_check_0
+off: md5sum_download_and_check_1
+off: gpg_signature_check
+ on: manifest_check
+ on: untar_source
+off: patch_source
+off: pre_configure
+ on: configure
+off: pre_make_package
+ on: make_package
+off: pre_install_package
+ on: install_package
+off: post_install_package
+ on: strip_binaries
+off: compress_manpages
+off: compress_info_files
+off: copy_init_scripts
+off: copy_config_files
+ on: install_documentation
+ on: slackdesc
+off: move_config_files
+off: postinstall_script
+off: slack_required
+ on: build_package
+ on: clean_builds
+#<< End SlackBuild Sections
+
+#------------------
+# Sections changes
+#------------------
+#>slackdesc
+[[PKG NAME]]: [[PKG NAME]]
+[[PKG NAME]]:
+[[PKG NAME]]:
+[[PKG NAME]]:
+[[PKG NAME]]:
+[[PKG NAME]]:
+[[PKG NAME]]:
+[[PKG NAME]]:
+[[PKG NAME]]:
+[[PKG NAME]]:
+[[PKG NAME]]:
+#<slackdesc

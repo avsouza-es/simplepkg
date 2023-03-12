@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+#  add-slack-required is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by the
+#  Free Software Foundation; either version 2 of the License, or any later version.
+#
+#  add-slack-required is distributed in the hope that it will be useful, but WITHOUT
+#  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+# enable a given mkbuild section
+# by rhatto at riseup.net
+#
+
+CWD="`pwd`"
+BASE="/data/projetos/code/mkbuilds"
+MATCH=": manifest_check" # example parameter
+ADD_BEFORE=": untar_source" # example section
+INCLUDE=" on: manifest_check" # example section
+
+cd $BASE
+FILES="` grep -l -R -L -e "$MATCH" * | grep -v .svn`" # match criteria
+#FILES="`grep -R "$MATCH" * | grep -v .svn | grep -v '""' | cut -d : -f 1 | uniq`" # unmatch criteria
+
+for file in $FILES; do
+  if [ "`basename $file .mkbuild`" != "`basename $file`" ]; then
+    echo processing $file
+    LINES="`wc -l $file | awk '{ print $1 }'`"
+    CENTER="`sed = $file | sed 'N;s/\n/\t/' | grep "$ADD_BEFORE" | awk '{ print $1 }'`"
+    CENTER="`echo $(($CENTER -1))`"
+    END="`echo $(($LINES - $CENTER))`"
+    head -n $CENTER $file > $file.new
+    echo "$INCLUDE" >> $file.new
+    tail -n $END $file >> $file.new
+    cat $file.new > $file
+    rm $file.new
+  fi
+done
+
+cd $CWD

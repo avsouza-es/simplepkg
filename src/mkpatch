@@ -1,0 +1,145 @@
+#!/bin/bash
+#
+# mkpatch: Simple patch program to .mkbuild models
+# feedback: rudsonaalves at yahoo.com.br | gpl
+#
+#  mkbuild is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  mkbuild is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+# Input:
+#   - $1 Diff_File
+#   - #2 Source_File
+#
+# Version:
+PROG_VERSION=1.1
+BASENAME=`basename $0`
+
+function get_line {
+
+    # get a line $1 from file $2
+    [ $# -ne 2 ] && exit $ERROR_PAR_NUMBER
+    ! is_number $1 && exit $ERROR_NOT_NUMBER
+    [ ! -e $2 ] && exit $ERROR_FILE_NOTFOUND
+
+    sed "$1 q;d" $2
+}
+
+function get_diff_line {
+
+    # get diff line e return:
+    #  - Action in Diff_Action
+    #  - Diff Line in Diff_Str_Line
+    if [ $1 -gt $Diff_N_Lines ]; then
+        Diff_Action=" "
+        Diff_Str_Line=""
+        return 0
+    fi
+    Line=`get_line $1 $2`
+    Diff_Action=`echo "$Line" | cut -c1`
+    Diff_Str_Line=`echo "$Line" | cut -c2-`
+}
+
+
+# ----------------------------------------------------------------
+# ------------------- mkpatch program ----------------------------
+# common.sh library start
+COMMON_SH="/usr/libexec/simplepkg/common.sh"
+if [ -f "$COMMON_SH" ]; then
+  source $COMMON_SH
+else
+  echo "$BASENAME: file $COMMON_SH not found. Check your $BASENAME installation"
+fi
+
+# Load error codes
+error_codes
+# ----------------
+
+if [ "$1" = "--help" -o "$1" = "-h" ]; then
+    echo "Use: $BASENAME <diff_file> <source_file>"
+    exit $ERROR_HELP
+fi
+
+# Check input parameters
+[ $# -ne 2 ] && exit $ERROR_PAR_NUMBER
+[ ! -e $1 ] && exit $ERROR_FILE_NOTFOUND
+[ ! -e $2 ] && exit $ERROR_FILE_NOTFOUND
+
+# Start variables
+Diff_File=$1
+Source_File=$2
+Diff_N_Lines=`wc -l $1 | cut -f1 -d" "`
+Source_N_Lines=`wc -l $2 | cut -f1 -d" "`
+
+# Start vars
+Diff_Line=1
+Diff_Pointer=1
+Status_Diff=0
+
+# Get frist Diff_File line
+get_diff_line $Diff_Line $Diff_File || exit $?
+
+Source_Line=1
+# Get frist Source_File line
+Source_Str_Line=`get_line $Source_Line $Source_File` || exit $?
+while [ $Source_Line -le $Source_N_Lines ];  do
+    # make Actions
+    case $Diff_Action in
+        '-')
+            if [ "$Source_Str_Line" = "$Diff_Str_Line" ]; then
+                Status_Diff=1
+                let Diff_Line++
+            else
+                Diff_Line=$Diff_Pointer
+                Status_Diff=0
+                echo "$Source_Str_Line"
+            fi
+            get_diff_line $Diff_Line $Diff_File || exit $?
+            let Source_Line++
+            Source_Str_Line=`get_line $Source_Line $Source_File` || exit $?
+        ;;
+        '+')
+            echo "$Diff_Str_Line"
+            let Diff_Line++
+            get_diff_line $Diff_Line $Diff_File || exit $?
+        ;;
+        ' ')
+            if [ "$Source_Str_Line" = "$Diff_Str_Line" ]; then
+                Status_Diff=1
+                let Diff_Line++
+            else
+                Status_Diff=0
+                Diff_Line=$Diff_Pointer
+            fi
+            echo "$Source_Str_Line"
+            get_diff_line $Diff_Line $Diff_File || exit $?
+            let Source_Line++
+            Source_Str_Line=`get_line $Source_Line $Source_File` || exit $?
+        ;;
+        '=')
+            let Diff_Line++
+            Status_Diff=0
+            Diff_Pointer=$Diff_Line
+            get_diff_line $Diff_Line $Diff_File || exit $?
+        ;;
+        *)
+            echo "Invalid diff action."
+            exit $ERROR_MKPATCH
+        ;;
+    esac
+done
+
+# Make others addline "+" in the end file
+while [ "$Diff_Action" = "+" -a $Diff_Line -le $Diff_N_Lines ]; do
+    echo "$Diff_Str_Line"
+    let Diff_Line++
+    get_diff_line $Diff_Line $Diff_File || exit $?
+done

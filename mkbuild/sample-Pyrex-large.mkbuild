@@ -1,0 +1,176 @@
+#
+#  This mkbuild is free software; you can redistribute it and/or modify it under the
+#  terms of the GNU General Public License as published by the Free Software
+#  Foundation; either version 2 of the License, or any later version.
+#
+#  This mkbuild is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License along with
+#  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+#  Place - Suite 330, Boston, MA 02111-1307, USA
+#
+
+#--------------------
+# Personal variables
+#--------------------
+# Author name
+[[SLACKBUILD AUTHOR]]="Rudson R. Alves"
+
+# Initials author name
+[[SLACKBUILD AUTHOR INITIALS]]="rra"
+
+#------------------------
+# Construction Variables
+#------------------------
+#
+# Source base name. if different from package name. Null ("") to default value.
+# Auto-set, get SRC_NAME from URL: http://.../$SRC_NAME-$VERSION.tar.$EXTENSION'
+[[SOURCE NAME]]="Pyrex"
+
+# Package name. Null ("") to auto-set
+# Auto-set, get PKG_NAME from URL downcase(SRC_NAME): http://.../$SRC_NAME-$VERSION.tar.$EXTENSION'
+[[PACKAGE NAME]]=""
+
+#
+# Source Name construction string
+# Default value is: $SRC_NAME-$VERSION.tar.$EXTENSION
+#[[SOURCE NAME CONSTRUCTION STRING]]="SOURCE NAME CONSTRUCTION STRING"
+[[SOURCE NAME CONSTRUCTION STRING]]="$SRC_NAME-$VERSION.tar.$EXTENSION"
+
+#
+# Complete URL address or URL base address ( without $SRC_NAME-$VERSION... )
+#[[DOWNLOAD FOLDER URL]]="http://www.cosc.canterbury.ac.nz/greg.ewing/python/Pyrex/Pyrex-0.9.5.1a.tar.gz"
+[[DOWNLOAD FOLDER URL]]="http://www.cosc.canterbury.ac.nz/greg.ewing/python/Pyrex/"
+
+#
+# Package version.  Null ("") to auto-set.
+# Auto-set, get VERSION from URL: http://.../$SRC_NAME-$VERSION.tar.$EXTENSION'
+[[VERSION]]="0.9.5.1a"
+
+#
+# Package extension. Null ("") to auto-set
+# Auto-set, get EXTENSION from URL: http://.../$SRC_NAME-$VERSION.tar.$EXTENSION'
+[[EXTENSION]]="gz"
+
+#
+# Unpacker programa ("") to auto-set. Default "tar"
+# Unpacke Flags ("") to auto-set. Default flags to tar "--no-same-owner --no-same-permissions -xvf"
+[[UNPACKER]]=""
+[[UNPACKER FLAGS]]=""
+
+#
+# Dependency list input
+# Enter string: "dependency_1 [condiction_1] [versio_1]: dependency_2 [condiction_2] [versio_2]"
+# Example:
+#[[SLACK REQUIRED]]="dep1 >= 1.1.1: dep2 >= 2.2.2:dep3:dep4:dep5 = 1.0"
+[[SLACK REQUIRED]]=""
+
+#
+# Decompress program
+# gz, tgz, bz2, set null ("") to auto-set
+# Auto-set, get DECOMPRESSOR from URL EXTENSION: http://.../$SRC_NAME-$VERSION.tar.$EXTENSION'
+[[DECOMPRESSOR]]=""
+
+#
+# Decompress check flag
+# gz, tgz, bz2, set null ("") to auto-set
+[[DECOMPRESSOR TEST FLAG]]=""
+
+#
+# Documentation files. Null ("") to auto-set commom doc-files:
+# NEWS TODO README AUTHORS INSTALL ChangeLog MAINTAINERS COPYING readme.*
+[[DOCUMENTATION FILES]]=""
+
+#
+# ./configure options
+[[OTHER CONFIGURE ARGS]]=""
+
+#
+# PREFIX. Default /usr
+[[PREFIX]]="/usr"
+
+#
+# Number of jobs
+[[NUMBER OF JOBS]]="-j7"
+
+#---------------------
+# Others changes
+#---------------------
+#[[PATCH FILES]]=""
+[[MD5SUM CODE]]="5a1bb7c76162a987a1d5040ea2d1f670"
+#[[MD5SUM EXTENSION]]=""
+#[[SIGNING KEY]]=""
+#[[SIGNING KEY URL]]=""
+#[[PATCH FILES]]=""
+
+# SlackBuild model
+[[SLACKBUILD MODEL]]="generic.mkSlackBuild"
+
+# SlackBuild PATH in Slack.Sarava tree
+[[SLACKBUILD PATH]]="dev/python/pyrex"
+
+#---------------------
+# SlackBuild Sections
+#---------------------
+# Default sections:
+#      head, set_variables, slkflags, start_structure, untar_source,
+#      make_package, install_package, build_package
+# Warning: don't remove '#>>' and "#<<" tags.
+#>> Start SlackBuild Sections:
+ on: head
+ on: slackbuildrc
+ on: set_variables
+ on: slkflags
+ on: error_codes
+ on: start_structure
+ on: download_source
+ on: md5sum_download_and_check_0
+off: md5sum_download_and_check_1
+off: gpg_signature_check
+ on: untar_source
+off: patch_source
+ on: configure
+ on: make_package
+ on: install_package
+ on: strip_binaries
+off: compress_manpages
+off: compress_info_files
+ on: install_documentation
+ on: slackdesc
+off: postinstall_script
+ on: build_package
+ on: clean_builds
+#<< End SlackBuild Sections
+
+#------------------
+# Sections changes
+#------------------
+#>slackdesc
+pyrex: Pyrex by Slack.Sarava
+pyrex:
+pyrex: Pyrex is a language specially designed for writing Python extension
+pyrex: modules. Its designed to bridge the gap between the nice, high-level,
+pyrex: easy-to-use world of Python and the messy, low-level world of C.
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+pyrex:
+#<slackdesc
+
+#------------ test section: untar_source -----------------
+#>untar_source
+# Untar program
+
+# Change to temp dir
+cd "$TMP"
+
+# Uncompress e untar source
+gunzip "$SRC_DIR/$SRC" | tar --no-same-owner --no-same-permissions -xvf || exit $ERROR_TAR
+
+# Change to source dir
+cd "$PKG_SRC"
+#<untar_source
